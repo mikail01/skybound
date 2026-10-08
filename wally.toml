@@ -1,0 +1,12 @@
+[package]
+name = "mikail01/skybound"
+version = "0.1.0"
+registry = "https://github.com/UpliftGames/wally-index"
+realm = "shared"
+
+[dependencies]
+# Promise = "evaera/promise@4"
+# Trove = "sleitnick/trove@1"
+
+[server-dependencies]
+# ProfileStore = "loleris/profilestore@1"
