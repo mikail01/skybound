@@ -279,6 +279,62 @@ do
 	check(again ~= nil and again.ok == false, "a quest cannot be claimed twice")
 end
 
+-- SELF-CHECK + BUILD STAMP -----------------------------------------------------------------
+print("== Self-check and build stamp")
+do
+	local failedChecks = 0
+	for _, w in R.warnings do
+		if string.find(w, "self-check", 1, true) then
+			failedChecks += 1
+			print("     " .. w)
+		end
+	end
+	check(failedChecks == 0, "startup self-check reported no failures")
+	local Diagnostics = serverModule("Diagnostics")
+	local results
+	R.spawnIn(serverCtx, function()
+		results = Diagnostics.run()
+	end)
+	run(0.1)
+	check(results ~= nil and #results >= 10, "self-check runs " .. (if results then #results else 0) .. " checks")
+	local hud = findGui("SkyboundHud")
+	local build = hud and hud.Root:FindFirstChild("Build")
+	check(build ~= nil and string.find(build.Text, "build ", 1, true) ~= nil and not string.find(build.Text, "MISMATCH", 1, true), "HUD shows the build stamp with no client/server mismatch")
+end
+
+-- ACHIEVEMENTS ---------------------------------------------------------------------------
+print("== Achievements")
+do
+	local Achievements = serverModule("Achievements")
+	R.spawnIn(serverCtx, function()
+		Achievements.bump(player, "capsules", 10)
+	end)
+	run(0.5)
+	check(profile.achievements.treasure_hunter == true, "10 capsules unlocks Treasure Hunter")
+	local hud = findGui("SkyboundHud")
+	local awards = findDescendant(hud, function(d)
+		return d:IsA("TextButton") and d.Name == "🏆 AWARDS"
+	end)
+	check(awards ~= nil, "AWARDS menu button exists")
+	if awards then
+		R.signalFor(awards, "Activated"):Fire()
+		run(0.5)
+	end
+	local open, frame = panelVisible("🏆 ACHIEVEMENTS")
+	check(open, "AWARDS opens the achievements panel")
+	check(frame ~= nil and clickButton(frame, "WEAR TITLE"), "unlocked title shows a WEAR TITLE button")
+	check(profile.title == "Treasure Hunter", "wearing the title saves it to the profile")
+	local head = player.Character and player.Character:FindFirstChild("Head")
+	local tag = head and head:FindFirstChild("SkyboundTitle")
+	check(tag ~= nil, "title appears above the character's head")
+	local bad
+	R.spawnIn(clientCtx, function()
+		bad = game:GetService("ReplicatedStorage").Remotes.EquipTitle:InvokeServer("Star Chaser")
+	end)
+	run(0.5)
+	check(bad ~= nil and bad.ok == false and profile.title == "Treasure Hunter", "a locked title cannot be equipped")
+end
+
 -- PORTAL -----------------------------------------------------------------------------------
 print("== Portal")
 local hub = workspace:FindFirstChild("Hub")
@@ -404,6 +460,7 @@ R.jitter = false
 R.highFps = nil
 run(2)
 check(player:GetAttribute("InRun") ~= true, "falling off ends the run")
+check(profile.achievements.first_flight == true, "finishing a run unlocks First Flight")
 local hud = findGui("SkyboundHud")
 local results = hud and hud.Root:FindFirstChild("Results")
 check(results ~= nil and results.Visible, "run results screen is shown")

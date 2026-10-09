@@ -23,6 +23,7 @@ local Analytics = require(script.Parent.Analytics)
 local Tutorial = require(script.Parent.Tutorial)
 local Leaderboard = require(script.Parent.Leaderboard)
 local Quests = require(script.Parent.Quests)
+local Achievements = require(script.Parent.Achievements)
 
 type Run = {
 	seed: number,
@@ -155,6 +156,7 @@ local function finish(player: Player, reason: string)
 	if run.arrived then
 		Quests.record(player, "runs", 1)
 		Quests.record(player, "height", height)
+		Achievements.check(player)
 	end
 	if run.tutorial then
 		profile.tutorial.firstRunDone = true
@@ -286,6 +288,10 @@ local function grantCapsule(player: Player, run: Run)
 	table.insert(run.items, rarity .. " Capsule")
 	Analytics.first(player, "FirstCapsuleFound")
 	Quests.record(player, "capsules", 1)
+	Achievements.bump(player, "capsules")
+	if rarity ~= "Common" and rarity ~= "Uncommon" and rarity ~= "Rare" then
+		Achievements.bump(player, "rareCapsules")
+	end
 	if rarity ~= "Common" and rarity ~= "Uncommon" then
 		Analytics.first(player, "FirstRareItem")
 	end

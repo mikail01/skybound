@@ -16,6 +16,7 @@ Remotes.Events = table.freeze({
 	"Notify",
 	"RewardPopup",
 	"WorldEntered",
+	"AchievementUnlocked",
 	-- client -> server
 	"CollectPickup",
 	"EndRun",
@@ -35,6 +36,7 @@ Remotes.Functions = table.freeze({
 	"ReturnToHub",
 	"SkipTutorial",
 	"ClaimQuest",
+	"EquipTitle",
 })
 
 local IS_SERVER = RunService:IsServer()

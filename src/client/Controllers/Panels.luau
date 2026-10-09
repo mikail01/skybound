@@ -748,6 +748,139 @@ local function buildQuests(root: Frame)
 	panels.Quests = { panel = panel, refresh = refresh }
 end
 
+-- ACHIEVEMENTS ------------------------------------------------------------------------
+local function achievementValue(profile: Types.Profile, kind: string): number
+	if kind == "bestHeight" then
+		return profile.bestHeight
+	elseif kind == "runs" then
+		return profile.totalRuns
+	elseif kind == "gear" then
+		local count = 0
+		for _, owned in profile.gear.owned do
+			if owned then
+				count += 1
+			end
+		end
+		return count
+	end
+	return profile.stats[kind] or 0
+end
+
+local function buildAchievements(root: Frame)
+	local panel = UI.panel(root, "🏆 ACHIEVEMENTS", T.gold, Vector2.new(1000, 660))
+	local list = UI.new("ScrollingFrame", {
+		Size = UDim2.fromScale(1, 1),
+		BackgroundTransparency = 1,
+		AutomaticCanvasSize = Enum.AutomaticSize.Y,
+		CanvasSize = UDim2.new(),
+		ScrollBarThickness = 8,
+		BorderSizePixel = 0,
+		ZIndex = 10,
+		Parent = panel.content,
+	})
+	UI.new(
+		"UIListLayout",
+		{ Padding = UDim.new(0, 10), SortOrder = Enum.SortOrder.LayoutOrder, Parent = list }
+	)
+	UI.padding(4).Parent = list
+
+	local function refresh()
+		local profile = State.profile()
+		if not profile then
+			return
+		end
+		clear(list)
+		local unlockedCount = 0
+		for _, def in Config.Achievements do
+			if profile.achievements[def.id] then
+				unlockedCount += 1
+			end
+		end
+		UI.label({
+			Text = string.format(
+				"%d / %d unlocked   •   Title: %s",
+				unlockedCount,
+				#Config.Achievements,
+				profile.title or "none"
+			),
+			Size = UDim2.new(1, -8, 0, 34),
+			TextXAlignment = Enum.TextXAlignment.Left,
+			TextColor3 = T.dark,
+			Stroke = Color3.new(1, 1, 1),
+			MaxText = 24,
+			LayoutOrder = 0,
+			ZIndex = 11,
+			Parent = list,
+		})
+		for order, def in Config.Achievements do
+			local unlocked = profile.achievements[def.id] == true
+			local value = math.min(achievementValue(profile, def.kind), def.target)
+			local card = UI.card({
+				size = UDim2.new(1, -8, 0, 100),
+				layoutOrder = order,
+				color = if unlocked then Color3.fromRGB(255, 248, 225) else T.panelInner,
+				strokeColor = if unlocked then T.gold else UI.darker(T.panelInner, 0.25),
+				parent = list,
+			})
+			UI.label({
+				Text = (if unlocked then "🏆 " else "🔒 ") .. def.name,
+				Size = UDim2.new(0.6, 0, 0, 32),
+				Position = UDim2.fromOffset(16, 8),
+				TextXAlignment = Enum.TextXAlignment.Left,
+				TextColor3 = if unlocked then T.gold else T.gray,
+				Stroke = T.dark,
+				MaxText = 26,
+				ZIndex = 11,
+				Parent = card,
+			})
+			UI.label({
+				Text = def.description
+					.. "   •   "
+					.. Formulas.describeReward(def.reward)
+					.. (if def.title then "   •   Title: " .. def.title else ""),
+				Size = UDim2.new(0.6, 0, 0, 24),
+				Position = UDim2.fromOffset(16, 42),
+				TextXAlignment = Enum.TextXAlignment.Left,
+				TextColor3 = T.dark,
+				Stroke = Color3.new(1, 1, 1),
+				MaxText = 18,
+				ZIndex = 11,
+				Parent = card,
+			})
+			local _, fill, text =
+				UI.progressBar(card, UDim2.new(0.6, 0, 0, 20), UDim2.fromOffset(16, 72), T.gold)
+			fill.Size = UDim2.fromScale(math.clamp(value / def.target, 0, 1), 1)
+			text.Text = Format.comma(value) .. " / " .. Format.comma(def.target)
+			local title = def.title
+			if unlocked and title then
+				local wearing = profile.title == title
+				local button = UI.button({
+					text = if wearing then "WEARING" else "WEAR TITLE",
+					color = if wearing then T.gray else T.purple,
+					size = UDim2.fromOffset(220, 62),
+					position = UDim2.new(1, -14, 0.5, 0),
+					anchor = Vector2.new(1, 0.5),
+					parent = card,
+					textSize = 24,
+				})
+				button.Activated:Connect(function()
+					local result = invoke("EquipTitle", if wearing then nil else title)
+					if result and result.ok then
+						Bus.fire(
+							"Toast",
+							if wearing then "Title removed" else "Now wearing: " .. title,
+							T.purple
+						)
+					end
+				end)
+			end
+		end
+	end
+
+	panel.onOpen = refresh
+	panels.Achievements = { panel = panel, refresh = refresh }
+end
+
 -- GEAR ------------------------------------------------------------------------------
 local function buildGear(root: Frame)
 	local panel = UI.panel(root, "🎒 GEAR", T.blue, Vector2.new(900, 520))
@@ -877,6 +1010,7 @@ function Panels.start()
 			Potions = buildPotions,
 			Gear = buildGear,
 			Quests = buildQuests,
+			Achievements = buildAchievements,
 		} :: { [string]: (Frame) -> () }
 	do
 		local ok, err = pcall(function()

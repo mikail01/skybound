@@ -530,6 +530,111 @@ Config.WeeklyQuests = table.freeze({
 	},
 } :: { QuestDef })
 
+-- Achievements: permanent goals. `kind` reads a profile value: "bestHeight",
+-- "runs", "gear" (gear owned) or a counter in profile.stats. Some unlock a
+-- title players can wear above their head.
+export type AchievementDef = {
+	id: string,
+	name: string,
+	description: string,
+	kind: string,
+	target: number,
+	reward: Reward,
+	title: string?,
+}
+
+Config.Achievements = table.freeze({
+	{
+		id = "first_flight",
+		name = "First Flight",
+		description = "Finish your first run",
+		kind = "runs",
+		target = 1,
+		reward = { coins = 100 },
+	},
+	{
+		id = "cloud_climber",
+		name = "Cloud Climber",
+		description = "Reach 1,000m",
+		kind = "bestHeight",
+		target = 1000,
+		reward = { coins = 300 },
+		title = "Cloud Climber",
+	},
+	{
+		id = "sky_explorer",
+		name = "Sky Explorer",
+		description = "Reach 10,000m",
+		kind = "bestHeight",
+		target = 10000,
+		reward = { gems = 25 },
+		title = "Sky Explorer",
+	},
+	{
+		id = "star_chaser",
+		name = "Star Chaser",
+		description = "Reach 50,000m",
+		kind = "bestHeight",
+		target = 50000,
+		reward = { gems = 100 },
+		title = "Star Chaser",
+	},
+	{
+		id = "never_gives_up",
+		name = "Never Gives Up",
+		description = "Finish 50 runs",
+		kind = "runs",
+		target = 50,
+		reward = { coins = 2000 },
+		title = "Never Gives Up",
+	},
+	{
+		id = "treasure_hunter",
+		name = "Treasure Hunter",
+		description = "Open 10 capsules",
+		kind = "capsules",
+		target = 10,
+		reward = { coins = 1000, potions = { luck = 2 } },
+		title = "Treasure Hunter",
+	},
+	{
+		id = "lucky_star",
+		name = "Lucky Star",
+		description = "Find an Epic or rarer capsule",
+		kind = "rareCapsules",
+		target = 1,
+		reward = { gems = 20 },
+		title = "Lucky Star",
+	},
+	{
+		id = "alchemist",
+		name = "Alchemist",
+		description = "Use 15 potions",
+		kind = "potions",
+		target = 15,
+		reward = { coins = 800, potions = { coin = 2 } },
+		title = "Alchemist",
+	},
+	{
+		id = "quest_master",
+		name = "Quest Master",
+		description = "Claim 25 quests",
+		kind = "quests",
+		target = 25,
+		reward = { gems = 50 },
+		title = "Quest Master",
+	},
+	{
+		id = "gearhead",
+		name = "Gearhead",
+		description = "Own 2 pieces of gear",
+		kind = "gear",
+		target = 2,
+		reward = { coins = 1500 },
+		title = "Gearhead",
+	},
+} :: { AchievementDef })
+
 Config.TutorialSteps = table.freeze({
 	{ id = "daily", target = "DailyStand", text = "CLAIM YOUR FREE REWARD" },
 	{ id = "upgrade", target = "UpgradeStation", text = "LET'S MAKE YOU STRONGER" },

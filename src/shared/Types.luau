@@ -21,6 +21,9 @@ export type Profile = {
 	firstJoin: number,
 	lastJoinDay: number,
 	quests: QuestState,
+	achievements: { [string]: boolean },
+	stats: { [string]: number },
+	title: string?,
 }
 
 export type QuestProgress = { id: string, progress: number, claimed: boolean }

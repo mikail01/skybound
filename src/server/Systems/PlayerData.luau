@@ -62,6 +62,9 @@ local function defaultProfile(): Profile
 		firstJoin = os.time(),
 		lastJoinDay = -1,
 		quests = { day = -1, daily = {}, week = -1, weekly = {} },
+		achievements = {},
+		stats = {},
+		title = nil,
 	}
 end
 
@@ -183,6 +186,11 @@ local function saveProfile(player: Player, release: boolean)
 			return record
 		end)
 	end)
+end
+
+-- True when DataStores are reachable and progress will save.
+function PlayerData.savingEnabled(): boolean
+	return store ~= nil
 end
 
 function PlayerData.get(player: Player): Profile?

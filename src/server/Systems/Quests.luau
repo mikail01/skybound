@@ -12,6 +12,7 @@ local Types = require(Shared.Types)
 local Net = require(script.Parent.Parent.Lib.Net)
 local PlayerData = require(script.Parent.PlayerData)
 local Analytics = require(script.Parent.Analytics)
+local Achievements = require(script.Parent.Achievements)
 
 local Quests = {}
 
@@ -144,6 +145,7 @@ function Quests.start()
 		PlayerData.grant(player, def.reward)
 		Analytics.event(player, "QuestClaimed_" .. def.id)
 		Analytics.first(player, "FirstQuestClaimed")
+		Achievements.bump(player, "quests")
 		PlayerData.syncNow(player)
 		return { ok = true, reward = def.reward }
 	end)

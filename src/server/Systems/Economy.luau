@@ -12,6 +12,7 @@ local PlayerData = require(script.Parent.PlayerData)
 local Analytics = require(script.Parent.Analytics)
 local Tutorial = require(script.Parent.Tutorial)
 local Quests = require(script.Parent.Quests)
+local Achievements = require(script.Parent.Achievements)
 
 local Economy = {}
 
@@ -88,6 +89,7 @@ function Economy.start()
 		profile.potions[id] -= 1
 		Analytics.first(player, "FirstPotionUsed")
 		Quests.record(player, "potions", 1)
+		Achievements.bump(player, "potions")
 		Analytics.event(player, "PotionUsed_" .. id)
 		PlayerData.syncNow(player)
 		return { ok = true }
@@ -109,6 +111,7 @@ function Economy.start()
 			return { ok = false, reason = "Not enough coins." }
 		end
 		profile.gear.owned[id] = true
+		Achievements.check(player)
 		Analytics.event(player, "GearBought_" .. id)
 		PlayerData.syncNow(player)
 		return { ok = true }

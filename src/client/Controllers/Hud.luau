@@ -17,6 +17,7 @@ local Config = require(Shared.Config)
 local Format = require(Shared.Format)
 local Formulas = require(Shared.Formulas)
 local Remotes = require(Shared.Remotes)
+local Build = require(Shared.Build)
 local Types = require(Shared.Types)
 
 local Lib = script.Parent.Parent:WaitForChild("Lib")
@@ -230,7 +231,7 @@ local function buildHub()
 		Name = "Menu",
 		AnchorPoint = Vector2.new(0, 0.5),
 		Position = UDim2.new(0, 20, 0.5, 30),
-		Size = UDim2.fromOffset(200, 530),
+		Size = UDim2.fromOffset(200, 620),
 		BackgroundTransparency = 1,
 		Parent = hubLayer,
 	})
@@ -244,6 +245,7 @@ local function buildHub()
 	menuButton(buttons, "POTIONS", "🧪", T.green, 4, "Potions")
 	menuButton(buttons, "GEAR", "🎒", T.blue, 5, "Gear")
 	menuButton(buttons, "QUESTS", "📜", Color3.fromRGB(240, 170, 70), 6, "Quests")
+	menuButton(buttons, "AWARDS", "🏆", T.gold, 7, "Achievements")
 
 	-- NEXT GOAL card.
 	local goal = UI.new("Frame", {
@@ -796,6 +798,16 @@ local function updateBadges(snap: Types.Snapshot)
 	badges.Quests.Visible = questsReady > 0
 	badges.Quests.BackgroundColor3 = T.green
 
+	local unlockedTitle = false
+	for _, def in Config.Achievements do
+		if def.title and profile.achievements[def.id] then
+			unlockedTitle = true
+		end
+	end
+	badges.Achievements.Text = "TITLE"
+	badges.Achievements.Visible = unlockedTitle and profile.title == nil
+	badges.Achievements.BackgroundColor3 = T.purple
+
 	badges.Gear.Text = "NEW"
 	badges.Gear.Visible = profile.gear.equipped == nil
 end
@@ -985,6 +997,18 @@ function Hud.start()
 				Hud.toast(data.title .. ": " .. data.text, color)
 			end
 		end)
+	Remotes.event("AchievementUnlocked").OnClientEvent
+		:Connect(function(data: { name: string, reward: string, title: string? })
+			bigBanner(
+				"🏆 " .. data.name:upper(),
+				"ACHIEVEMENT  •  "
+					.. data.reward
+					.. (if data.title then "  •  New title!" else ""),
+				T.gold,
+				2.6
+			)
+			UI.playSound(Config.Sounds.Reward, 0.6, 1.3)
+		end)
 	Bus.on("WorldEntered", function(name: string)
 		bigBanner(name:upper(), "NEW WORLD", T.text, 2.4)
 	end)
@@ -1062,6 +1086,42 @@ function Hud.start()
 	end)
 
 	RunService.Heartbeat:Connect(heartbeat)
+
+	-- Build stamp: proves which version Studio is running, and flags a
+	-- client/server mismatch (e.g. a partial sync).
+	local buildLabel = UI.label({
+		Name = "Build",
+		Text = "build " .. Build.ID,
+		AnchorPoint = Vector2.new(0, 1),
+		Position = UDim2.new(0, 12, 1, -6),
+		Size = UDim2.fromOffset(260, 22),
+		TextXAlignment = Enum.TextXAlignment.Left,
+		TextTransparency = 0.35,
+		MaxText = 18,
+		Parent = root,
+	})
+	print(string.format("[Skybound] client build %s (%s)", Build.ID, Build.NAME))
+	task.spawn(function()
+		local ReplicatedStorage = game:GetService("ReplicatedStorage")
+		local serverBuild = ReplicatedStorage:GetAttribute("ServerBuild")
+		local waited = 0
+		while serverBuild == nil and waited < 10 do
+			waited += task.wait(0.5)
+			serverBuild = ReplicatedStorage:GetAttribute("ServerBuild")
+		end
+		if serverBuild ~= nil and serverBuild ~= Build.ID then
+			buildLabel.Text =
+				string.format("build %s (server %s - MISMATCH)", Build.ID, tostring(serverBuild))
+			buildLabel.TextColor3 = T.red
+			warn(
+				string.format(
+					"[Skybound] client build %s does not match server build %s",
+					Build.ID,
+					tostring(serverBuild)
+				)
+			)
+		end
+	end)
 
 	-- Friendly welcome on first join.
 	task.spawn(function()
