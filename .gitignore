@@ -16,3 +16,5 @@ sourcemap.json
 # OS
 .DS_Store
 Thumbs.db
+tests/.work/
+tests/mock/apidb.luau

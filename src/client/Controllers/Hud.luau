@@ -55,6 +55,8 @@ local fuelBack: Frame
 local fuelFill: Frame
 local promptLabel: TextLabel
 local touchLayer: Frame
+local potionBar: Frame
+local potionButtons: { [string]: { button: TextButton, count: TextLabel } } = {}
 local toastList: Frame
 local flash: Frame
 local results: Frame
@@ -476,6 +478,63 @@ local function buildRun()
 	bind(left, "left")
 	bind(right, "right")
 	bind(boost, "boost")
+
+	-- Quick-use potions during a climb (keys 1-5, tap, or click).
+	potionBar = UI.new("Frame", {
+		Name = "Potions",
+		AnchorPoint = Vector2.new(1, 1),
+		Position = UDim2.new(1, -20, 1, -24),
+		Size = UDim2.fromOffset(84, 5 * 90),
+		BackgroundTransparency = 1,
+		Parent = runLayer,
+	})
+	UI.new("UIListLayout", {
+		Padding = UDim.new(0, 8),
+		VerticalAlignment = Enum.VerticalAlignment.Bottom,
+		SortOrder = Enum.SortOrder.LayoutOrder,
+		Parent = potionBar,
+	})
+	for i, def in Config.Potions do
+		local button = UI.new("TextButton", {
+			Name = def.id,
+			Size = UDim2.fromOffset(82, 82),
+			BackgroundColor3 = def.color,
+			AutoButtonColor = true,
+			Text = "",
+			LayoutOrder = i,
+			Visible = false,
+			Parent = potionBar,
+		}, { UI.corner(41), UI.stroke(UI.darker(def.color, 0.45), 3, true) })
+		UI.label({
+			Text = def.icon,
+			Size = UDim2.fromScale(0.62, 0.62),
+			Position = UDim2.fromScale(0.19, 0.1),
+			Stroke = false,
+			Parent = button,
+		})
+		local count = UI.label({
+			Text = "",
+			AnchorPoint = Vector2.new(1, 1),
+			Position = UDim2.new(1, 4, 1, 4),
+			Size = UDim2.fromOffset(40, 28),
+			BackgroundTransparency = 0,
+			BackgroundColor3 = T.dark,
+			MaxText = 20,
+			Parent = button,
+		})
+		UI.corner(14).Parent = count
+		UI.label({
+			Text = tostring(i),
+			Position = UDim2.fromOffset(-2, -2),
+			Size = UDim2.fromOffset(24, 24),
+			MaxText = 18,
+			Parent = button,
+		})
+		potionButtons[def.id] = { button = button, count = count }
+		button.Activated:Connect(function()
+			Hud.usePotion(def.id)
+		end)
+	end
 end
 
 local function buildShared()
@@ -494,6 +553,7 @@ local function buildShared()
 	UI.new("UIListLayout", {
 		Padding = UDim.new(0, 8),
 		HorizontalAlignment = Enum.HorizontalAlignment.Right,
+		SortOrder = Enum.SortOrder.LayoutOrder,
 		Parent = effectsList,
 	})
 
@@ -646,31 +706,39 @@ local function showResults(result: Types.RunResult)
 end
 
 -- Updates ------------------------------------------------------------------------
+local effectRows: { [string]: { row: Frame, text: TextLabel } } = {}
+-- Active potion timers. Rows are created once per potion and reused; only
+-- their text and visibility change as timers tick.
 local function refreshEffects()
-	for _, child in effectsList:GetChildren() do
-		if child:IsA("Frame") then
-			child:Destroy()
-		end
-	end
-	for _, def in Config.Potions do
+	for order, def in Config.Potions do
 		local remaining = State.effectRemaining(def.id)
-		if remaining > 0 then
+		local entry = effectRows[def.id]
+		if remaining > 0 and not entry then
 			local row = UI.new("Frame", {
+				Name = def.id,
 				Size = UDim2.fromOffset(220, 46),
 				BackgroundColor3 = T.dark,
 				BackgroundTransparency = 0.2,
+				LayoutOrder = order,
 				Parent = effectsList,
 			}, { UI.corner(23), UI.stroke(def.color, 3, true) })
-			UI.label({
+			local text = UI.label({
 				Name = "Text",
-				Text = def.icon .. " " .. (if def.id == "shield"
-					then "x" .. remaining
-					else Format.clock(remaining)),
+				Text = "",
 				Size = UDim2.new(1, -20, 1, -10),
 				Position = UDim2.fromOffset(10, 5),
 				MaxText = 28,
 				Parent = row,
 			})
+			entry = { row = row, text = text }
+			effectRows[def.id] = entry
+			UI.pop(row, 0.2)
+		end
+		if entry then
+			entry.row.Visible = remaining > 0
+			entry.text.Text = def.icon
+				.. " "
+				.. (if def.id == "shield" then "x" .. remaining else Format.clock(remaining))
 		end
 	end
 end
@@ -715,6 +783,41 @@ local function updateBadges(snap: Types.Snapshot)
 	badges.Gear.Visible = profile.gear.equipped == nil
 end
 
+local usingPotion = false
+function Hud.usePotion(id: string)
+	if usingPotion then
+		return
+	end
+	local def = Formulas.potion(id)
+	local profile = State.profile()
+	if not def or not profile or (profile.potions[id] or 0) <= 0 then
+		return
+	end
+	usingPotion = true
+	local ok, result = pcall(function()
+		return Remotes.func("UsePotion"):InvokeServer(id)
+	end)
+	usingPotion = false
+	if ok and typeof(result) == "table" and result.ok then
+		UI.playSound(Config.Sounds.Reward, 0.5, 0.8)
+		Hud.toast(def.icon .. " " .. def.name .. " active!", def.color)
+		local entry = potionButtons[id]
+		if entry then
+			UI.pop(entry.button, 0.3)
+		end
+	elseif ok and typeof(result) == "table" and result.reason then
+		Hud.toast(result.reason, T.red)
+	end
+end
+
+local function refreshPotionBar(profile: Types.Profile)
+	for id, entry in potionButtons do
+		local count = profile.potions[id] or 0
+		entry.button.Visible = count > 0
+		entry.count.Text = "x" .. count
+	end
+end
+
 local function onProfile(snap: Types.Snapshot)
 	local profile = snap.profile
 	if lastCoins >= 0 and profile.coins > lastCoins then
@@ -746,6 +849,7 @@ local function onProfile(snap: Types.Snapshot)
 	skipButton.Visible = profile.tutorial.step <= #Config.TutorialSteps
 	updateBadges(snap)
 	refreshEffects()
+	refreshPotionBar(profile)
 end
 
 local function setMode(running: boolean)
@@ -809,12 +913,7 @@ local function heartbeat(dt: number)
 	end
 	updateBadges(snap)
 	-- Potion timers tick locally.
-	for _, row in effectsList:GetChildren() do
-		if row:IsA("Frame") then
-			refreshEffects()
-			break
-		end
-	end
+	refreshEffects()
 end
 
 local function portalFlash()
@@ -915,6 +1014,24 @@ function Hud.start()
 		Remotes.func("ReturnToHub"):InvokeServer()
 		busy = false
 		Bus.fire("RequestHub")
+	end)
+	-- Potion hotkeys during a climb.
+	local potionKeys = {
+		[Enum.KeyCode.One] = 1,
+		[Enum.KeyCode.Two] = 2,
+		[Enum.KeyCode.Three] = 3,
+		[Enum.KeyCode.Four] = 4,
+		[Enum.KeyCode.Five] = 5,
+	}
+	UserInputService.InputBegan:Connect(function(input, processed)
+		local index = potionKeys[input.KeyCode]
+		if processed or not index or not RunState.active then
+			return
+		end
+		local def = Config.Potions[index]
+		if def then
+			Hud.usePotion(def.id)
+		end
 	end)
 	-- Fast retry: R key / gamepad Y.
 	UserInputService.InputBegan:Connect(function(input, processed)

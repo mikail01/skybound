@@ -664,7 +664,64 @@ local function setupCharacter(): boolean
 	return true
 end
 
+-- Cosmetic jetpack on the climber's back; the flame shows while boosting.
+local jetpack: Model? = nil
+local flames: { BasePart } = {}
+local function removeJetpack()
+	if jetpack then
+		jetpack:Destroy()
+		jetpack = nil
+	end
+	flames = {}
+end
+
+local function attachJetpack(hrp: BasePart)
+	removeJetpack()
+	local model = Instance.new("Model")
+	model.Name = "RunJetpack"
+	local function piece(props: { [string]: any }, offset: CFrame): Part
+		local p = Instance.new("Part")
+		p.Anchored = false
+		p.CanCollide = false
+		p.CanQuery = false
+		p.CanTouch = false
+		p.Massless = true
+		p.CastShadow = false
+		p.Material = Enum.Material.SmoothPlastic
+		for key, value in props do
+			(p :: any)[key] = value
+		end
+		p.CFrame = hrp.CFrame * offset
+		local weld = Instance.new("WeldConstraint")
+		weld.Part0 = hrp
+		weld.Part1 = p
+		weld.Parent = p
+		p.Parent = model
+		return p
+	end
+	for _, side in { -0.45, 0.45 } do
+		piece({
+			Name = "Tank",
+			Shape = Enum.PartType.Cylinder,
+			Size = Vector3.new(1.8, 0.8, 0.8),
+			Color = Color3.fromRGB(230, 90, 90),
+		}, CFrame.new(side, 0.1, 0.9) * CFrame.Angles(0, 0, math.rad(90)))
+		local flame = piece({
+			Name = "Flame",
+			Shape = Enum.PartType.Ball,
+			Size = Vector3.one * 0.7,
+			Color = Color3.fromRGB(255, 170, 50),
+			Material = Enum.Material.Neon,
+			Transparency = 1,
+		}, CFrame.new(side, -1.2, 0.9))
+		table.insert(flames, flame)
+	end
+	model.Parent = hrp.Parent
+	jetpack = model
+end
+
 local function releaseCharacter()
+	removeJetpack()
 	if antiGravity then
 		antiGravity:Destroy()
 		antiGravity = nil
@@ -778,6 +835,10 @@ local function step(dt: number)
 		end
 	end
 	RunState.boosting = boosting
+	for _, flame in flames do
+		flame.Transparency = if boosting then 0.1 else 1
+		flame.Size = Vector3.one * (if boosting then 0.6 + math.random() * 0.5 else 0.7)
+	end
 
 	-- Hazards.
 	for _, chunk in chunks do
@@ -1132,6 +1193,11 @@ local function begin(runInfo: Types.RunInfo)
 	end
 	character:PivotTo(spawnCFrame)
 	hrp.AssemblyLinearVelocity = Vector3.zero
+	if runInfo.hasJetpack then
+		attachJetpack(hrp)
+	else
+		removeJetpack()
+	end
 	local camera = workspace.CurrentCamera
 	camera.CameraType = Enum.CameraType.Scriptable
 	camera.FieldOfView = M.CAMERA_FOV
