@@ -11,6 +11,7 @@ local Net = require(script.Parent.Parent.Lib.Net)
 local PlayerData = require(script.Parent.PlayerData)
 local Analytics = require(script.Parent.Analytics)
 local Tutorial = require(script.Parent.Tutorial)
+local Quests = require(script.Parent.Quests)
 
 local Economy = {}
 
@@ -86,6 +87,7 @@ function Economy.start()
 		end
 		profile.potions[id] -= 1
 		Analytics.first(player, "FirstPotionUsed")
+		Quests.record(player, "potions", 1)
 		Analytics.event(player, "PotionUsed_" .. id)
 		PlayerData.syncNow(player)
 		return { ok = true }

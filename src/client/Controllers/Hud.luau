@@ -230,7 +230,7 @@ local function buildHub()
 		Name = "Menu",
 		AnchorPoint = Vector2.new(0, 0.5),
 		Position = UDim2.new(0, 20, 0.5, 30),
-		Size = UDim2.fromOffset(200, 440),
+		Size = UDim2.fromOffset(200, 530),
 		BackgroundTransparency = 1,
 		Parent = hubLayer,
 	})
@@ -243,6 +243,7 @@ local function buildHub()
 	menuButton(buttons, "UPGRADES", "⬆", T.purple, 3, "Upgrades")
 	menuButton(buttons, "POTIONS", "🧪", T.green, 4, "Potions")
 	menuButton(buttons, "GEAR", "🎒", T.blue, 5, "Gear")
+	menuButton(buttons, "QUESTS", "📜", Color3.fromRGB(240, 170, 70), 6, "Quests")
 
 	-- NEXT GOAL card.
 	local goal = UI.new("Frame", {
@@ -779,6 +780,22 @@ local function updateBadges(snap: Types.Snapshot)
 	badges.Potions.Visible = potionCount > 0
 	badges.Potions.BackgroundColor3 = T.blue
 
+	local questsReady = 0
+	for _, list in { profile.quests.daily, profile.quests.weekly } do
+		for _, q in list do
+			for _, pool in { Config.DailyQuests, Config.WeeklyQuests } do
+				for _, def in pool do
+					if def.id == q.id and not q.claimed and q.progress >= def.target then
+						questsReady += 1
+					end
+				end
+			end
+		end
+	end
+	badges.Quests.Text = tostring(questsReady)
+	badges.Quests.Visible = questsReady > 0
+	badges.Quests.BackgroundColor3 = T.green
+
 	badges.Gear.Text = "NEW"
 	badges.Gear.Visible = profile.gear.equipped == nil
 end
@@ -942,7 +959,7 @@ function Hud.start()
 			text,
 			if kind == "error" or kind == "hub"
 				then T.red
-				elseif kind == "playtime" then T.gold
+				elseif kind == "playtime" or kind == "quest" then T.gold
 				else nil
 		)
 	end)

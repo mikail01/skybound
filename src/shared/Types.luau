@@ -20,6 +20,16 @@ export type Profile = {
 	funnel: { [string]: boolean },
 	firstJoin: number,
 	lastJoinDay: number,
+	quests: QuestState,
+}
+
+export type QuestProgress = { id: string, progress: number, claimed: boolean }
+
+export type QuestState = {
+	day: number,
+	daily: { QuestProgress },
+	week: number,
+	weekly: { QuestProgress },
 }
 
 -- Extra computed state the server sends alongside the profile.

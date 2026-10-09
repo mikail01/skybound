@@ -425,6 +425,111 @@ Config.Worlds = table.freeze({
 } :: { WorldDef })
 
 -- Onboarding steps shown by the world-space waypoint arrows.
+-- Quests. `kind` is what is tracked; "best" kinds use the best single-run
+-- value, the rest add up. Daily quests draw DAILY_QUEST_COUNT from the daily
+-- pool each UTC day; weekly ones draw WEEKLY_QUEST_COUNT each week.
+export type QuestDef = {
+	id: string,
+	kind: string, -- "height" | "coins" | "runs" | "potions" | "capsules" | "gems"
+	target: number,
+	text: string,
+	reward: Reward,
+}
+
+Config.DAILY_QUEST_COUNT = 3
+Config.WEEKLY_QUEST_COUNT = 2
+
+Config.DailyQuests = table.freeze({
+	{
+		id = "d_height_1500",
+		kind = "height",
+		target = 1500,
+		text = "Reach 1,500m in one run",
+		reward = { coins = 400 },
+	},
+	{
+		id = "d_height_3000",
+		kind = "height",
+		target = 3000,
+		text = "Reach 3,000m in one run",
+		reward = { coins = 700, gems = 3 },
+	},
+	{
+		id = "d_coins_150",
+		kind = "coins",
+		target = 150,
+		text = "Collect 150 coins",
+		reward = { coins = 300 },
+	},
+	{
+		id = "d_coins_400",
+		kind = "coins",
+		target = 400,
+		text = "Collect 400 coins",
+		reward = { coins = 600, potions = { coin = 1 } },
+	},
+	{
+		id = "d_runs_5",
+		kind = "runs",
+		target = 5,
+		text = "Complete 5 runs",
+		reward = { coins = 350, potions = { jump = 1 } },
+	},
+	{
+		id = "d_potions_2",
+		kind = "potions",
+		target = 2,
+		text = "Use 2 potions",
+		reward = { coins = 300, potions = { luck = 1 } },
+	},
+	{
+		id = "d_capsules_1",
+		kind = "capsules",
+		target = 1,
+		text = "Open 1 capsule",
+		reward = { coins = 400, gems = 2 },
+	},
+	{ id = "d_gems_2", kind = "gems", target = 2, text = "Find 2 gems", reward = { coins = 500 } },
+} :: { QuestDef })
+
+Config.WeeklyQuests = table.freeze({
+	{
+		id = "w_height_15000",
+		kind = "height",
+		target = 15000,
+		text = "Reach 15,000m in one run",
+		reward = { coins = 4000, gems = 25 },
+	},
+	{
+		id = "w_runs_25",
+		kind = "runs",
+		target = 25,
+		text = "Complete 25 runs",
+		reward = { coins = 3000, potions = { luck = 2, shield = 1 } },
+	},
+	{
+		id = "w_capsules_8",
+		kind = "capsules",
+		target = 8,
+		text = "Open 8 capsules",
+		reward = { coins = 3500, gems = 20 },
+	},
+	{
+		id = "w_coins_3000",
+		kind = "coins",
+		target = 3000,
+		text = "Collect 3,000 coins",
+		reward = { coins = 5000 },
+	},
+	{
+		id = "w_potions_10",
+		kind = "potions",
+		target = 10,
+		text = "Use 10 potions",
+		reward = { gems = 30, potions = { coin = 2 } },
+	},
+} :: { QuestDef })
+
 Config.TutorialSteps = table.freeze({
 	{ id = "daily", target = "DailyStand", text = "CLAIM YOUR FREE REWARD" },
 	{ id = "upgrade", target = "UpgradeStation", text = "LET'S MAKE YOU STRONGER" },

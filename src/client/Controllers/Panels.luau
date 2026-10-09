@@ -597,6 +597,157 @@ local function buildPotions(root: Frame)
 	panels.Potions = { panel = panel, refresh = refresh }
 end
 
+-- QUESTS ---------------------------------------------------------------------------
+local function questDef(id: string): Config.QuestDef?
+	for _, list in { Config.DailyQuests, Config.WeeklyQuests } do
+		for _, q in list do
+			if q.id == id then
+				return q
+			end
+		end
+	end
+	return nil
+end
+
+local function buildQuests(root: Frame)
+	local panel = UI.panel(root, "📜 QUESTS", Color3.fromRGB(240, 170, 70), Vector2.new(980, 640))
+	local list = UI.new("ScrollingFrame", {
+		Size = UDim2.fromScale(1, 1),
+		BackgroundTransparency = 1,
+		AutomaticCanvasSize = Enum.AutomaticSize.Y,
+		CanvasSize = UDim2.new(),
+		ScrollBarThickness = 8,
+		BorderSizePixel = 0,
+		ZIndex = 10,
+		Parent = panel.content,
+	})
+	UI.new(
+		"UIListLayout",
+		{ Padding = UDim.new(0, 10), SortOrder = Enum.SortOrder.LayoutOrder, Parent = list }
+	)
+	UI.padding(4).Parent = list
+
+	local function refresh()
+		local profile = State.profile()
+		if not profile then
+			return
+		end
+		clear(list)
+		local order = 0
+		for _, section in
+			{
+				{
+					scope = "daily",
+					title = "DAILY QUESTS — new every day",
+					entries = profile.quests.daily,
+				},
+				{
+					scope = "weekly",
+					title = "WEEKLY QUESTS — new every week",
+					entries = profile.quests.weekly,
+				},
+			}
+		do
+			order += 1
+			UI.label({
+				Text = section.title,
+				Size = UDim2.new(1, -8, 0, 36),
+				TextXAlignment = Enum.TextXAlignment.Left,
+				TextColor3 = Color3.fromRGB(240, 170, 70),
+				Stroke = T.dark,
+				MaxText = 28,
+				LayoutOrder = order,
+				ZIndex = 11,
+				Parent = list,
+			})
+			for index, q in section.entries do
+				local def = questDef(q.id)
+				if def then
+					order += 1
+					local done = q.progress >= def.target
+					local card = UI.card({
+						size = UDim2.new(1, -8, 0, 104),
+						layoutOrder = order,
+						color = if done and not q.claimed
+							then Color3.fromRGB(255, 246, 220)
+							else T.panelInner,
+						parent = list,
+					})
+					UI.label({
+						Text = def.text,
+						Size = UDim2.new(0.62, 0, 0, 34),
+						Position = UDim2.fromOffset(16, 8),
+						TextXAlignment = Enum.TextXAlignment.Left,
+						TextColor3 = T.dark,
+						Stroke = Color3.new(1, 1, 1),
+						MaxText = 26,
+						ZIndex = 11,
+						Parent = card,
+					})
+					UI.label({
+						Text = "Reward: " .. Formulas.describeReward(def.reward),
+						Size = UDim2.new(0.62, 0, 0, 24),
+						Position = UDim2.fromOffset(16, 44),
+						TextXAlignment = Enum.TextXAlignment.Left,
+						TextColor3 = T.purple,
+						Stroke = Color3.new(1, 1, 1),
+						MaxText = 20,
+						ZIndex = 11,
+						Parent = card,
+					})
+					local _, fill, text = UI.progressBar(
+						card,
+						UDim2.new(0.62, 0, 0, 22),
+						UDim2.fromOffset(16, 74),
+						T.gold
+					)
+					fill.Size = UDim2.fromScale(math.clamp(q.progress / def.target, 0, 1), 1)
+					text.Text = Format.comma(q.progress) .. " / " .. Format.comma(def.target)
+					if q.claimed then
+						UI.label({
+							Text = "✔ CLAIMED",
+							AnchorPoint = Vector2.new(1, 0.5),
+							Position = UDim2.new(1, -20, 0.5, 0),
+							Size = UDim2.fromOffset(200, 40),
+							TextColor3 = T.green,
+							MaxText = 26,
+							ZIndex = 11,
+							Parent = card,
+						})
+					else
+						local button = UI.button({
+							text = if done then "CLAIM" else "IN PROGRESS",
+							color = if done then T.green else T.gray,
+							size = UDim2.fromOffset(220, 66),
+							position = UDim2.new(1, -14, 0.5, 0),
+							anchor = Vector2.new(1, 0.5),
+							parent = card,
+							textSize = 26,
+						})
+						if done then
+							local scope, idx = section.scope, index
+							button.Activated:Connect(function()
+								local result = invoke("ClaimQuest", scope, idx)
+								if result and result.ok then
+									UI.playSound(Config.Sounds.Reward, 0.6, 1.1)
+									Bus.fire(
+										"Toast",
+										"+" .. Formulas.describeReward(result.reward),
+										T.gold
+									)
+								end
+							end)
+						end
+					end
+				end
+			end
+		end
+	end
+
+	panel.onOpen = refresh
+	panels.Quests = { panel = panel, refresh = refresh }
+end
+
 -- GEAR ------------------------------------------------------------------------------
 local function buildGear(root: Frame)
 	local panel = UI.panel(root, "🎒 GEAR", T.blue, Vector2.new(900, 520))
@@ -725,6 +876,7 @@ function Panels.start()
 			Upgrades = buildUpgrades,
 			Potions = buildPotions,
 			Gear = buildGear,
+			Quests = buildQuests,
 		} :: { [string]: (Frame) -> () }
 	do
 		local ok, err = pcall(function()

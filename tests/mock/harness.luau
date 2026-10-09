@@ -250,6 +250,35 @@ check(profile ~= nil and profile.gear.equipped == "jetpack_basic", "equipping se
 local errorsAfterStalls = #R.errors
 check(errorsAfterStalls == 0, "no runtime errors during stall interactions (" .. errorsAfterStalls .. ")")
 
+-- QUESTS ---------------------------------------------------------------------------------
+print("== Quests")
+check(#profile.quests.daily == 3 and #profile.quests.weekly == 2, "3 daily and 2 weekly quests are rolled")
+check(triggerStall("QuestBoard"), "QuestBoard has a ProximityPrompt")
+local questsOpen, questFrame = panelVisible("📜 QUESTS")
+check(questsOpen, "Quest Board prompt opens the QUESTS panel")
+do
+	local Quests = serverModule("Quests")
+	local first = profile.quests.daily[1]
+	local def = Quests.def(first.id)
+	R.spawnIn(serverCtx, function()
+		Quests.record(player, def.kind, def.target)
+	end)
+	run(0.5)
+	check(first.progress >= def.target, "recording gameplay completes the quest (" .. def.id .. ")")
+	local coinsBefore = profile.coins
+	triggerStall("QuestBoard")
+	_, questFrame = panelVisible("📜 QUESTS")
+	check(clickButton(questFrame, "CLAIM"), "completed quest shows a CLAIM button")
+	check(first.claimed == true, "claiming marks the quest claimed")
+	check(profile.coins > coinsBefore or (def.reward.coins or 0) == 0, "claiming grants the quest reward")
+	local again
+	R.spawnIn(clientCtx, function()
+		again = game:GetService("ReplicatedStorage").Remotes.ClaimQuest:InvokeServer("daily", 1)
+	end)
+	run(0.5)
+	check(again ~= nil and again.ok == false, "a quest cannot be claimed twice")
+end
+
 -- PORTAL -----------------------------------------------------------------------------------
 print("== Portal")
 local hub = workspace:FindFirstChild("Hub")

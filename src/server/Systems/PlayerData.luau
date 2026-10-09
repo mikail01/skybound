@@ -61,6 +61,7 @@ local function defaultProfile(): Profile
 		funnel = {},
 		firstJoin = os.time(),
 		lastJoinDay = -1,
+		quests = { day = -1, daily = {}, week = -1, weekly = {} },
 	}
 end
 

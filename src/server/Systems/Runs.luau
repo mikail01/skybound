@@ -22,6 +22,7 @@ local PlayerData = require(script.Parent.PlayerData)
 local Analytics = require(script.Parent.Analytics)
 local Tutorial = require(script.Parent.Tutorial)
 local Leaderboard = require(script.Parent.Leaderboard)
+local Quests = require(script.Parent.Quests)
 
 type Run = {
 	seed: number,
@@ -151,6 +152,10 @@ local function finish(player: Player, reason: string)
 		Leaderboard.recordBest(player, height)
 	end
 	profile.totalRuns += 1
+	if run.arrived then
+		Quests.record(player, "runs", 1)
+		Quests.record(player, "height", height)
+	end
 	if run.tutorial then
 		profile.tutorial.firstRunDone = true
 	end
@@ -280,6 +285,7 @@ local function grantCapsule(player: Player, run: Run)
 	run.gems += reward.gems or 0
 	table.insert(run.items, rarity .. " Capsule")
 	Analytics.first(player, "FirstCapsuleFound")
+	Quests.record(player, "capsules", 1)
 	if rarity ~= "Common" and rarity ~= "Uncommon" then
 		Analytics.first(player, "FirstRareItem")
 	end
@@ -334,9 +340,11 @@ local function onCollect(player: Player, chunkIndex: any, pickupId: any)
 			else 1
 		local amount = pickup.value * mult
 		run.coins += amount
+		Quests.record(player, "coins", amount)
 		PlayerData.addCoins(player, amount)
 	elseif pickup.kind == "gem" then
 		run.gems += 1
+		Quests.record(player, "gems", 1)
 		PlayerData.addGems(player, 1)
 	elseif pickup.kind == "potion" and pickup.potion then
 		PlayerData.addPotion(player, pickup.potion, 1)

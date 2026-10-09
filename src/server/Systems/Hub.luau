@@ -707,6 +707,52 @@ local function leaderboardBoard()
 	end
 end
 
+local function questBoard()
+	local m = model("QuestBoard")
+	local pos = CENTER + Vector3.new(-50, 0, 46)
+	local cf = CFrame.lookAt(pos, CENTER + Vector3.new(0, 0, 20))
+	for _, x in { -5, 5 } do
+		local post = cylinder(12, 1.3, Vector3.zero, C.woodDark, m)
+		post.CFrame = cf * CFrame.new(x, 6, 0) * CFrame.Angles(0, 0, math.rad(90))
+	end
+	local board = part({
+		Name = "Board",
+		Size = Vector3.new(12, 8, 0.8),
+		CFrame = cf * CFrame.new(0, 7.5, 0),
+		Color = C.wood,
+	}, m)
+	-- Pinned paper notes.
+	for i, offset in
+		{ Vector3.new(-3.2, 1.2, -0.5), Vector3.new(0.4, 0.4, -0.5), Vector3.new(3.4, 1.4, -0.5) }
+	do
+		local note = part({
+			Name = "Note",
+			Size = Vector3.new(2.6, 3, 0.15),
+			Color = if i == 2 then Color3.fromRGB(255, 240, 170) else Color3.fromRGB(250, 250, 240),
+		}, m)
+		note.CFrame = cf
+			* CFrame.new(0, 7.5, 0)
+			* CFrame.new(offset)
+			* CFrame.Angles(0, 0, math.rad((i - 2) * 6))
+		ball(
+			0.5,
+			(note.CFrame * CFrame.new(0, 1.3, -0.1)).Position,
+			Color3.fromRGB(230, 80, 80),
+			m,
+			false
+		)
+	end
+	local roof = part({
+		Name = "Roof",
+		Size = Vector3.new(14, 0.8, 3),
+		Color = Color3.fromRGB(240, 170, 70),
+	}, m)
+	roof.CFrame = cf * CFrame.new(0, 12.2, -0.4) * CFrame.Angles(math.rad(-10), 0, 0)
+	billboard(board, "QUESTS", "NEW DAILY", Color3.fromRGB(240, 170, 70), 9)
+	prompt(board, "Quest Board", "Quests")
+	m.PrimaryPart = board
+end
+
 local function decorate()
 	local blocked = {
 		Vector3.new(0, 0, 42), -- spawn
@@ -716,6 +762,7 @@ local function decorate()
 		Vector3.new(-40, 0, -22),
 		Vector3.new(40, 0, -22),
 		Vector3.new(50, 0, 46),
+		Vector3.new(-50, 0, 46), -- quest board
 	}
 	local function free(offset: Vector3, radius: number): boolean
 		if math.abs(offset.X) < 7 then
@@ -850,6 +897,7 @@ function Hub.init()
 	gearStall()
 	potionStall()
 	leaderboardBoard()
+	questBoard()
 	pathTo(CENTER + Vector3.new(0, 0, 36), CENTER + Vector3.new(0, 0, -36))
 	pathTo(CENTER + Vector3.new(0, 0, 22), CENTER + Vector3.new(-26, 0, 14))
 	pathTo(CENTER + Vector3.new(0, 0, 22), CENTER + Vector3.new(26, 0, 14))

@@ -34,6 +34,7 @@ Remotes.Functions = table.freeze({
 	"Retry",
 	"ReturnToHub",
 	"SkipTutorial",
+	"ClaimQuest",
 })
 
 local IS_SERVER = RunService:IsServer()
