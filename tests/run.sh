@@ -23,3 +23,9 @@ for mode in steady jitter fps240; do
   (cd "$here/mock" && python3 bundle.py "$work/h_$mode.luau" "$work/o_$mode.luau" >/dev/null)
   "$work/luau" "$work/o_$mode.luau" | grep -E "FAIL|ERROR|ALL CHECKS PASSED|CHECK\(S\) FAILED"
 done
+if command -v "${PWSH:-pwsh}" >/dev/null 2>&1; then
+  echo "== Auto-sync script"
+  "$here/sync/run_sync_tests.sh" | tail -1
+else
+  echo "== Auto-sync script: skipped (PowerShell 7 not installed; set PWSH=/path/to/pwsh)"
+fi
