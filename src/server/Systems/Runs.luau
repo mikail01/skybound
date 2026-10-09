@@ -41,6 +41,7 @@ type Run = {
 	items: { string },
 	worldIndex: number,
 	ended: boolean,
+	ready: boolean, -- the client confirmed its run controller started
 }
 
 local Runs = {}
@@ -52,6 +53,35 @@ local rng = Random.new()
 
 local AC = Config.AntiCheat
 local CHUNK = Config.Generation.CHUNK_HEIGHT
+local READY_TIMEOUT = 6 -- seconds for the client to confirm a run started
+local PAD_TOP_OFFSET = -0.3 -- launch pad sits just under the first platform
+
+-- Every lane gets a real, collidable launch pad at its start so the portal
+-- always drops players onto something solid, even before (or if) the client
+-- builds the tower.
+local function ensureLaunchPad(lane: number, origin: Vector3)
+	local folder = workspace:FindFirstChild("RunPads")
+	if not folder then
+		folder = Instance.new("Folder")
+		folder.Name = "RunPads"
+		folder.Parent = workspace
+	end
+	local name = "Lane" .. lane
+	if folder:FindFirstChild(name) then
+		return
+	end
+	local pad = Instance.new("Part")
+	pad.Name = name
+	pad.Anchored = true
+	pad.CanCollide = true
+	pad.Size = Vector3.new(Config.RUN_HALF_WIDTH * 2 + 6, 2, 12)
+	pad.CFrame = CFrame.new(origin + Vector3.new(0, PAD_TOP_OFFSET - 1, 0))
+	pad.Color = Color3.fromRGB(150, 140, 200)
+	pad.Material = Enum.Material.SmoothPlastic
+	pad.TopSurface = Enum.SurfaceType.Smooth
+	pad.BottomSurface = Enum.SurfaceType.Smooth
+	pad.Parent = folder
+end
 
 local function rootOf(player: Player): BasePart?
 	local character = player.Character
@@ -181,11 +211,13 @@ function Runs.begin(player: Player, fromPortal: boolean): boolean
 		items = {},
 		worldIndex = 1,
 		ended = false,
+		ready = false,
 	}
 	runs[player] = run
 
+	ensureLaunchPad(lane, origin)
 	root.Anchored = false
-	character:PivotTo(CFrame.new(origin + Vector3.new(0, 5, 0)))
+	character:PivotTo(CFrame.new(origin + Vector3.new(0, 4, 0)))
 	root.AssemblyLinearVelocity = Vector3.zero
 	player:SetAttribute("InRun", true)
 
@@ -314,6 +346,25 @@ local function validate(player: Player, run: Run, now: number)
 		finish(player, "died")
 		return
 	end
+	-- Safety net: if the client never confirmed the run (script error, lost
+	-- event), bring the player home instead of leaving them in an empty lane.
+	if not run.ready and now - run.startTime > READY_TIMEOUT then
+		warn(
+			"[Runs] client never confirmed run start for "
+				.. player.Name
+				.. "; returning them to the hub"
+		)
+		run.ended = true -- no results screen for a run that never started
+		player:SetAttribute("InRun", false)
+		Runs.returnToHub(player)
+		Net.fire(
+			player,
+			"Notify",
+			"The run couldn't start, so you're back at the hub. Try the portal again!",
+			"hub"
+		)
+		return
+	end
 	local dt = now - run.lastCheck
 	run.lastCheck = now
 	local y = root.Position.Y - run.origin.Y
@@ -331,8 +382,9 @@ local function validate(player: Player, run: Run, now: number)
 	if run.trustedY > run.maxY then
 		run.maxY = run.trustedY
 	end
-	-- Fell far below the best point: the client should have ended the run.
-	if y < run.maxY - 220 then
+	-- Fell far below the best point, or below the launch pad: the client
+	-- should already have ended the run, so end it here.
+	if y < run.maxY - 220 or y < PAD_TOP_OFFSET - 30 then
 		finish(player, "fell")
 		return
 	end
@@ -370,6 +422,13 @@ function Runs.start()
 
 	Net.onEvent("EndRun", 0.5, function(player, reason: any)
 		finish(player, if reason == "hazard" then "hazard" else "fell")
+	end)
+
+	Net.onEvent("RunReady", 0, function(player)
+		local run = runs[player]
+		if run and not run.ended then
+			run.ready = true
+		end
 	end)
 
 	Net.onEvent("ShieldUsed", 0.5, function(player)

@@ -841,7 +841,10 @@ function Hud.start()
 	Remotes.event("Notify").OnClientEvent:Connect(function(text: string, kind: string?)
 		Hud.toast(
 			text,
-			if kind == "error" then T.red elseif kind == "playtime" then T.gold else nil
+			if kind == "error" or kind == "hub"
+				then T.red
+				elseif kind == "playtime" then T.gold
+				else nil
 		)
 	end)
 	Remotes.event("Milestone").OnClientEvent

@@ -100,8 +100,10 @@ function UI.label(props: { [string]: any }): TextLabel
 		TextColor3 = T.text,
 		TextScaled = true,
 	})
+	-- Parent, Stroke and MaxText are options for this helper, not TextLabel
+	-- properties; assigning them to the label throws at runtime.
 	for key, value in props do
-		if key ~= "Parent" and key ~= "Stroke" then
+		if key ~= "Parent" and key ~= "Stroke" and key ~= "MaxText" then
 			(label :: any)[key] = value
 		end
 	end

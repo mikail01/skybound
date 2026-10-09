@@ -693,19 +693,48 @@ local function buildGear(root: Frame)
 end
 
 function Panels.start()
-	local _, root = UI.gui("SkyboundPanels", 5)
-	buildDaily(root)
-	buildPlaytime(root)
-	buildUpgrades(root)
-	buildPotions(root)
-	buildGear(root)
-
+	-- Wire inputs first so a stall can never be silently dead, even if one
+	-- panel fails to build.
+	ProximityPromptService.PromptTriggered:Connect(function(prompt)
+		local name = prompt:GetAttribute("Panel")
+		if typeof(name) ~= "string" then
+			return
+		end
+		if RunState.active then
+			Bus.fire("Toast", "Finish your run first!", T.red)
+			return
+		end
+		Bus.fire("OpenPanel", name)
+	end)
 	Bus.on("OpenPanel", function(name: string)
 		local def = panels[name]
 		if def then
+			UI.click()
 			def.panel.open()
+		else
+			warn("[Panels] no panel named " .. tostring(name))
+			Bus.fire("Toast", "That stall isn't open yet.", T.red)
 		end
 	end)
+
+	local _, root = UI.gui("SkyboundPanels", 5)
+	for name, build in
+		{
+			Daily = buildDaily,
+			Playtime = buildPlaytime,
+			Upgrades = buildUpgrades,
+			Potions = buildPotions,
+			Gear = buildGear,
+		} :: { [string]: (Frame) -> () }
+	do
+		local ok, err = pcall(function()
+			build(root)
+		end)
+		if not ok then
+			warn("[Panels] failed to build " .. name .. " panel: " .. tostring(err))
+		end
+	end
+
 	Bus.on("ProfileChanged", function()
 		for _, def in panels do
 			if def.panel.isOpen() then
@@ -715,13 +744,6 @@ function Panels.start()
 	end)
 	Bus.on("RunBegan", function()
 		UI.closeAll()
-	end)
-
-	ProximityPromptService.PromptTriggered:Connect(function(prompt)
-		local name = prompt:GetAttribute("Panel")
-		if typeof(name) == "string" and not RunState.active then
-			Bus.fire("OpenPanel", name)
-		end
 	end)
 end
 

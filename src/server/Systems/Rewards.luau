@@ -39,7 +39,14 @@ function Rewards.start()
 		local ready, nextAt = dailyState(player)
 		snap.dailyReady = ready
 		snap.dailyNextAt = nextAt
-		snap.playtimeClaimed = playtimeClaimed[player] or {}
+		-- Send a dense true/false array: remotes drop entries from tables
+		-- with gaps in their numeric keys (e.g. only reward 2 claimed).
+		local claimed = playtimeClaimed[player] or {}
+		local dense = {}
+		for i in Config.PlaytimeRewards do
+			dense[i] = claimed[i] == true
+		end
+		snap.playtimeClaimed = dense
 	end)
 
 	PlayerData.onLoaded(function(player)

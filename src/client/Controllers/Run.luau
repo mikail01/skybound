@@ -82,6 +82,7 @@ local camY = 0
 local maxY = 0
 local fuel = 0
 local iceTimer = 0
+local lastFootY: number? = nil -- foot height seen last frame (for swept landing)
 local elapsed = 0
 local shieldCharges = 0
 local promptIndex = 0
@@ -834,8 +835,14 @@ local function step(dt: number)
 	vy = math.max(vy, -M.MAX_FALL_SPEED)
 
 	-- Platforms: one-way, bounce when falling through the top surface.
+	-- Swept test: compare where the feet were last frame with where they are
+	-- (or are about to be). Physics runs at a fixed 60 Hz while rendering can
+	-- be much faster, so positions arrive in jumps; a single-frame prediction
+	-- misses platforms at high FPS and the player falls through.
 	local nextFoot = footY + vy * dt
+	local prevFoot = lastFootY or footY
 	local bounced = false
+	local landedTop: number? = nil
 	if vy <= 0 then
 		for _, chunk in chunks do
 			if bounced then
@@ -845,8 +852,8 @@ local function step(dt: number)
 				if not view.gone then
 					local top = view.data.y
 					if
-						footY >= top - 0.6
-						and nextFoot <= top + 0.1
+						prevFoot >= top - 0.6
+						and math.min(footY, nextFoot) <= top + 0.1
 						and math.abs(rel.X - view.x) <= view.data.width / 2 + 1
 					then
 						local kind = view.data.kind
@@ -857,6 +864,7 @@ local function step(dt: number)
 							vy = M.JUMP_VELOCITY * runInfo.jumpMultiplier * mult
 							view.squash = 1
 							bounced = true
+							landedTop = top
 							bounceKick = if kind == "bounce" then 1.6 else 0.6
 							fuel = math.min(
 								runInfo.fuel,
@@ -891,6 +899,13 @@ local function step(dt: number)
 			end
 		end
 	end
+
+	-- If the feet already sank below the platform, lift them back onto it.
+	if landedTop and footY < landedTop then
+		hrp.CFrame += Vector3.new(0, landedTop - footY, 0)
+		footY = landedTop
+	end
+	lastFootY = footY
 
 	-- Moving platforms + squash animation.
 	for _, chunk in chunks do
@@ -1078,6 +1093,7 @@ local function begin(runInfo: Types.RunInfo)
 	maxY = 0
 	fuel = runInfo.fuel
 	iceTimer = 0
+	lastFootY = nil
 	elapsed = 0
 	promptIndex = 0
 	worldIndex = 1
@@ -1127,7 +1143,26 @@ end
 
 function Run.start()
 	Remotes.event("RunStarted").OnClientEvent:Connect(function(runInfo: Types.RunInfo)
-		begin(runInfo)
+		local ok, err = pcall(function()
+			begin(runInfo)
+		end)
+		if ok and active then
+			-- Tell the server the climb is live; without this it brings us home.
+			Remotes.event("RunReady"):FireServer()
+			return
+		end
+		warn(
+			"[Run] couldn't start the run: " .. tostring(if ok then "character not ready" else err)
+		)
+		Bus.fire(
+			"Toast",
+			"Couldn't start the run — back to the hub.",
+			Color3.fromRGB(240, 85, 85)
+		)
+		pcall(function()
+			Remotes.func("ReturnToHub"):InvokeServer()
+		end)
+		exitToHub()
 	end)
 	Remotes.event("RunResult").OnClientEvent:Connect(function()
 		-- The server can end a run on its own (e.g. invalid movement).
@@ -1143,6 +1178,12 @@ function Run.start()
 		end
 	end)
 	Bus.on("RequestHub", exitToHub)
+	-- The server sends kind "hub" when it pulled us out of a run itself.
+	Remotes.event("Notify").OnClientEvent:Connect(function(_, kind: string?)
+		if kind == "hub" and info then
+			exitToHub()
+		end
+	end)
 	player.CharacterAdded:Connect(function()
 		if info then
 			exitToHub()

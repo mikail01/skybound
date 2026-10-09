@@ -20,6 +20,7 @@ Remotes.Events = table.freeze({
 	"CollectPickup",
 	"EndRun",
 	"ShieldUsed",
+	"RunReady",
 })
 
 Remotes.Functions = table.freeze({
