@@ -1115,6 +1115,23 @@ local function begin(runInfo: Types.RunInfo)
 	if not setupCharacter() then
 		return
 	end
+	-- Move onto the launch pad ourselves, now that the controller is ready
+	-- to hold the character. The server unanchors the root before telling us
+	-- to start; give that a moment to replicate on a retry.
+	local hrp = root :: BasePart
+	local character = hrp.Parent :: Model
+	local waited = 0
+	while hrp.Anchored and waited < 1 do
+		waited += task.wait()
+	end
+	local spawnCFrame = CFrame.new(runInfo.origin + Vector3.new(0, 4, 0))
+	if workspace.StreamingEnabled then
+		pcall(function()
+			player:RequestStreamAroundAsync(spawnCFrame.Position, 2)
+		end)
+	end
+	character:PivotTo(spawnCFrame)
+	hrp.AssemblyLinearVelocity = Vector3.zero
 	local camera = workspace.CurrentCamera
 	camera.CameraType = Enum.CameraType.Scriptable
 	camera.FieldOfView = M.CAMERA_FOV
@@ -1123,6 +1140,7 @@ local function begin(runInfo: Types.RunInfo)
 	buildBestMarker(runInfo.origin, runInfo.bestHeight)
 	active = true
 	renderConnection = RunService.RenderStepped:Connect(step)
+	print(string.format("[Skybound] climb started at %s", tostring(runInfo.origin)))
 	Bus.fire("RunBegan", runInfo)
 end
 

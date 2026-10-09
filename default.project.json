@@ -1,6 +1,8 @@
 {
   "name": "skybound",
-  "globIgnorePaths": ["**/.gitkeep"],
+  "globIgnorePaths": [
+    "**/.gitkeep"
+  ],
   "tree": {
     "$className": "DataModel",
     "ReplicatedStorage": {
@@ -18,6 +20,12 @@
         "Client": {
           "$path": "src/client"
         }
+      }
+    },
+    "Workspace": {
+      "$className": "Workspace",
+      "$properties": {
+        "StreamingEnabled": false
       }
     }
   }

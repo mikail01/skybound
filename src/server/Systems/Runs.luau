@@ -42,6 +42,8 @@ type Run = {
 	worldIndex: number,
 	ended: boolean,
 	ready: boolean, -- the client confirmed its run controller started
+	readyAt: number,
+	arrived: boolean, -- the character has reached the launch pad
 }
 
 local Runs = {}
@@ -212,14 +214,21 @@ function Runs.begin(player: Player, fromPortal: boolean): boolean
 		worldIndex = 1,
 		ended = false,
 		ready = false,
+		readyAt = 0,
+		arrived = false,
 	}
 	runs[player] = run
 
+	-- The pad exists before the client hears about the run, and the client
+	-- moves its own character onto it only once its climb controller is
+	-- running. The server never drops anyone into an empty lane.
 	ensureLaunchPad(lane, origin)
 	root.Anchored = false
-	character:PivotTo(CFrame.new(origin + Vector3.new(0, 4, 0)))
 	root.AssemblyLinearVelocity = Vector3.zero
 	player:SetAttribute("InRun", true)
+	print(
+		string.format("[Skybound] run started for %s (lane %d, seed %d)", player.Name, lane, seed)
+	)
 
 	if fromPortal then
 		Analytics.funnel(player, "FirstPortalEntry")
@@ -346,24 +355,39 @@ local function validate(player: Player, run: Run, now: number)
 		finish(player, "died")
 		return
 	end
-	-- Safety net: if the client never confirmed the run (script error, lost
-	-- event), bring the player home instead of leaving them in an empty lane.
-	if not run.ready and now - run.startTime > READY_TIMEOUT then
-		warn(
-			"[Runs] client never confirmed run start for "
-				.. player.Name
-				.. "; returning them to the hub"
-		)
-		run.ended = true -- no results screen for a run that never started
-		player:SetAttribute("InRun", false)
-		Runs.returnToHub(player)
-		Net.fire(
-			player,
-			"Notify",
-			"The run couldn't start, so you're back at the hub. Try the portal again!",
-			"hub"
-		)
-		return
+	-- Until the client confirms the run and its character reaches the pad,
+	-- there is nothing to validate yet. If that never happens (client error,
+	-- lost event) cancel the run; the player is still standing in the hub.
+	if not run.arrived then
+		local offset = root.Position - (run.origin + Vector3.new(0, 4, 0))
+		if run.ready and offset.Magnitude < 40 then
+			run.arrived = true
+			run.lastCheck = now
+			run.trustedY = math.max(0, offset.Y + 4)
+			print(string.format("[Skybound] %s arrived at the launch pad", player.Name))
+		elseif
+			now - run.startTime > READY_TIMEOUT or (run.ready and now - run.readyAt > READY_TIMEOUT)
+		then
+			warn(
+				string.format(
+					"[Skybound] run for %s cancelled: client %s",
+					player.Name,
+					if run.ready then "never reached the launch pad" else "never confirmed the run"
+				)
+			)
+			run.ended = true -- no results screen for a run that never started
+			player:SetAttribute("InRun", false)
+			Runs.returnToHub(player)
+			Net.fire(
+				player,
+				"Notify",
+				"The run couldn't start, so you're back at the hub. Try the portal again!",
+				"hub"
+			)
+			return
+		else
+			return
+		end
 	end
 	local dt = now - run.lastCheck
 	run.lastCheck = now
@@ -426,8 +450,9 @@ function Runs.start()
 
 	Net.onEvent("RunReady", 0, function(player)
 		local run = runs[player]
-		if run and not run.ended then
+		if run and not run.ended and not run.ready then
 			run.ready = true
+			run.readyAt = os.clock()
 		end
 	end)
 
