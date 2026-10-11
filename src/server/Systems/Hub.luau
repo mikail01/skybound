@@ -931,6 +931,15 @@ function Hub.init()
 	lighting()
 	local source = HubMap.find()
 	local mapLayout = source and HubMap.build(source, hubFolder, CENTER)
+	if not mapLayout then
+		-- No usable import: rebuild the same island from the baked data.
+		local ok, result = pcall(HubMap.buildBaked, hubFolder, CENTER)
+		if ok then
+			mapLayout = result
+		else
+			warn("[Skybound] could not build the island from data: " .. tostring(result))
+		end
+	end
 	local layout: Layout
 	if mapLayout then
 		hubFolder:SetAttribute("Island", "map")
@@ -966,14 +975,12 @@ function Hub.init()
 			d.Enabled = false
 		end
 	end
-	if mapLayout then
-		print("[Skybound] hub uses the imported island " .. (source :: Model).Name)
+	if mapLayout and source then
+		print("[Skybound] hub uses the imported island " .. source.Name)
+	elseif mapLayout then
+		print("[Skybound] hub uses the floating island (built from baked data)")
 	else
-		warn(
-			"[Skybound] no "
-				.. Config.HUB_MAP_NAME
-				.. " found (ServerStorage or Workspace); using the island built from code"
-		)
+		warn("[Skybound] floating island unavailable; using the island built from code")
 	end
 end
 

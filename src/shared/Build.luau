@@ -4,6 +4,6 @@
 -- the Output window at startup).
 
 return table.freeze({
-	ID = "0.8.1",
-	NAME = "island spawn fix",
+	ID = "0.9.0",
+	NAME = "floating island built in",
 })

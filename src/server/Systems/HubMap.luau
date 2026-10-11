@@ -519,6 +519,8 @@ local function edgeWalls(center: Vector3, radius: number, parent: Instance)
 	end
 end
 
+local place: (map: Model, frame: Frame, parent: Instance, center: Vector3) -> Layout
+
 -- Clones the map into `parent`, sizes it, centres its meadow on `center`
 -- and returns where everything goes. nil if the map can't be understood.
 function HubMap.build(source: Model, parent: Instance, center: Vector3): Layout?
@@ -551,6 +553,11 @@ function HubMap.build(source: Model, parent: Instance, center: Vector3): Layout?
 	local delta = center - worldOf(frame, Vector3.new(0, LOW, 0))
 	map:PivotTo(map:GetPivot() + delta)
 	frame = measure(map) :: Frame
+	return place(map, frame, parent, center)
+end
+
+-- Puts everything on a map that is already sized and centred.
+function place(map: Model, frame: Frame, parent: Instance, center: Vector3): Layout
 	local coarse = prepareParts(map)
 	map.Parent = parent
 
@@ -574,13 +581,29 @@ function HubMap.build(source: Model, parent: Instance, center: Vector3): Layout?
 	end
 	local portalModel = portal :: Model
 	portalModel.Parent = parent
+	local base = toWorld(PORTAL_BASE.X, PORTAL_BASE.Y, PORTAL_BASE.Z)
+	local facing = flatDirection(frame, PORTAL_FACING.X, PORTAL_FACING.Z)
 	local vortex = portalModel:FindFirstChild("Portal_Vortex", true)
 	if vortex and vortex:IsA("BasePart") then
 		vortex.Name = "Surface"
 		vortex.Transparency = 0.25
+	elseif not portalModel:FindFirstChild("Surface") then
+		-- Built from triangles: add a glowing disc the client can animate.
+		local at = toWorld(PORTAL_VORTEX.X, PORTAL_VORTEX.Y, PORTAL_VORTEX.Z)
+		newPart({
+			Name = "Surface",
+			Shape = Enum.PartType.Cylinder,
+			Size = Vector3.new(0.3, 6.5 * frame.unit, 6.5 * frame.unit),
+			CFrame = CFrame.lookAt(at, at + facing) * CFrame.Angles(0, math.rad(90), 0),
+			Color = Color3.fromRGB(176, 108, 255),
+			Material = Enum.Material.Neon,
+			Transparency = 0.25,
+			CanCollide = false,
+			CanTouch = false,
+			CanQuery = false,
+			CastShadow = false,
+		}, portalModel)
 	end
-	local base = toWorld(PORTAL_BASE.X, PORTAL_BASE.Y, PORTAL_BASE.Z)
-	local facing = flatDirection(frame, PORTAL_FACING.X, PORTAL_FACING.Z)
 	local vortexCenter = toWorld(PORTAL_VORTEX.X, PORTAL_VORTEX.Y, PORTAL_VORTEX.Z)
 	portalModel.WorldPivot = CFrame.lookAt(vortexCenter, vortexCenter + facing)
 	portalModel:SetAttribute("GroundY", base.Y)
@@ -595,6 +618,21 @@ function HubMap.build(source: Model, parent: Instance, center: Vector3): Layout?
 		CanCollide = false,
 		CanQuery = false,
 		CastShadow = false,
+		Material = Enum.Material.SmoothPlastic,
+	}, parent)
+
+	-- A guaranteed solid floor on the spawn pad (the pad itself may be thin
+	-- triangles or a mesh with coarse collision).
+	local padSpot = SPOTS.spawn
+	local padTop = toWorld(padSpot.x, padSpot.y, padSpot.z)
+	newPart({
+		Name = "SpawnFloor",
+		Shape = Enum.PartType.Cylinder,
+		Size = Vector3.new(1, 10 * frame.unit, 10 * frame.unit),
+		CFrame = CFrame.new(padTop - Vector3.new(0, 0.5, 0)) * CFrame.Angles(0, 0, math.rad(90)),
+		Transparency = 1,
+		CastShadow = false,
+		CanQuery = false,
 		Material = Enum.Material.SmoothPlastic,
 	}, parent)
 
@@ -635,6 +673,115 @@ function HubMap.build(source: Model, parent: Instance, center: Vector3): Layout?
 		quests = spot("quests"),
 		leaderboard = spot("leaderboard"),
 	}
+end
+
+-- One flat triangle from two wedges (thin, so it reads as a surface).
+local function triangle(
+	a: Vector3,
+	b: Vector3,
+	c: Vector3,
+	props: { [string]: any },
+	parent: Instance
+)
+	local ab, ac, bc = b - a, c - a, c - b
+	local abd, acd, bcd = ab:Dot(ab), ac:Dot(ac), bc:Dot(bc)
+	if abd > acd and abd > bcd then
+		c, a = a, c
+	elseif acd > bcd and acd > abd then
+		a, b = b, a
+	end
+	ab, ac, bc = b - a, c - a, c - b
+	local normal = ac:Cross(ab)
+	if normal.Magnitude < 1e-6 or bc.Magnitude < 1e-6 then
+		return
+	end
+	local right = normal.Unit
+	local up = bc:Cross(right).Unit
+	local back = bc.Unit
+	local height = math.abs(ab:Dot(up))
+	if height < 0.002 then
+		return
+	end
+	for i, depth in { math.abs(ab:Dot(back)), math.abs(ac:Dot(back)) } do
+		if depth >= 0.002 then
+			local w = Instance.new("WedgePart")
+			w.Anchored = true
+			w.TopSurface = Enum.SurfaceType.Smooth
+			w.BottomSurface = Enum.SurfaceType.Smooth
+			w.Material = Enum.Material.SmoothPlastic
+			w.Size = Vector3.new(0.15, height, depth)
+			w.CFrame = if i == 1
+				then CFrame.fromMatrix((a + b) / 2, right, up, back)
+				else CFrame.fromMatrix((a + c) / 2, -right, up, -back)
+			for key, value in props do
+				(w :: any)[key] = value
+			end
+			w.Parent = parent
+		end
+	end
+end
+
+local function numbers(s: string): { number }
+	local out = {}
+	for token in string.gmatch(s, "%-?%d+") do
+		table.insert(out, tonumber(token) :: number)
+	end
+	return out
+end
+
+-- Rebuilds the island from baked triangle data (Lib/IslandMesh), so it
+-- needs no 3D import at all: it syncs into Studio with the rest of the code.
+function HubMap.buildBaked(parent: Instance, center: Vector3): Layout?
+	local lib = script.Parent.Parent:FindFirstChild("Lib")
+	local dataModule = lib and lib:FindFirstChild("IslandMesh")
+	if not dataModule or not dataModule:IsA("ModuleScript") then
+		return nil
+	end
+	local data = (require :: any)(dataModule)
+	local u = Config.HUB_MAP_SCALE
+	local g = REF_POINTS.Island_Grass
+	local frame: Frame = {
+		origin = center + Vector3.new(g.X * u, (g.Y - LOW) * u, g.Z * u),
+		ax = Vector3.new(u, 0, 0),
+		az = Vector3.new(0, 0, u),
+		unit = u,
+	}
+	local palette: { Color3 } = {}
+	for i, hex in data.palette do
+		palette[i] = Color3.fromHex(hex)
+	end
+
+	local map = Instance.new("Model")
+	map.Name = "IslandMap"
+	local groups: { [string]: Model } = {}
+	for _, mesh in data.meshes do
+		local groupName = string.match(mesh.name, "^[^_]+") or mesh.name
+		local group = groups[groupName]
+		if not group then
+			group = Instance.new("Model")
+			group.Name = groupName
+			group.Parent = map
+			groups[groupName] = group
+		end
+		local holder = Instance.new("Model")
+		holder.Name = mesh.name
+		holder.Parent = group
+		local v = numbers(mesh.verts)
+		local t = numbers(mesh.tris)
+		local function vertex(i: number): Vector3
+			local k = (i - 1) * 3
+			return worldOf(frame, Vector3.new(v[k + 1], v[k + 2], v[k + 3]) / 100)
+		end
+		local decor = isDecor(mesh.name)
+		for k = 1, #t, 4 do
+			triangle(vertex(t[k]), vertex(t[k + 1]), vertex(t[k + 2]), {
+				Name = mesh.name,
+				Color = palette[t[k + 3]],
+				CastShadow = not decor,
+			}, holder)
+		end
+	end
+	return place(map, frame, parent, center)
 end
 
 return HubMap

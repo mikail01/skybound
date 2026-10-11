@@ -457,6 +457,10 @@ CFrame = {
 		return angles(0, y, 0) * angles(x, 0, 0) * angles(0, 0, z)
 	end,
 	lookAt = lookAt,
+	fromMatrix = function(pos, vx, vy, vz)
+		vz = vz or vx:Cross(vy)
+		return cf(pos.X, pos.Y, pos.Z, { vx.X, vy.X, vz.X, vx.Y, vy.Y, vz.Y, vx.Z, vy.Z, vz.Z })
+	end,
 	identity = cf(0, 0, 0),
 }
 
