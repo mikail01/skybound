@@ -94,7 +94,9 @@ lines = [
     "-- indices plus a palette index.",
     "",
     "return {",
-    "\tpalette = { " + ", ".join('"%s"' % c for c in palette) + " },",
+    "\tpalette = {",
+    *['\t\t"%s",' % c for c in palette],
+    "\t},",
     "\tmeshes = {",
 ]
 for name, verts, tris in meshes:

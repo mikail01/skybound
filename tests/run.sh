@@ -28,6 +28,16 @@ for mode in steady jitter fps240 map import; do
   (cd "$here/mock" && python3 bundle.py "$work/h_$mode.luau" "$work/o_$mode.luau" >/dev/null)
   "$work/luau" "$work/o_$mode.luau" | grep -E "FAIL|ERROR|ALL CHECKS PASSED|CHECK\(S\) FAILED"
 done
+echo "== Drop-in SpawnOnIsland script (foreign game)"
+python3 - "$here" "$work" <<'PY'
+import sys
+here, work = sys.argv[1], sys.argv[2]
+src = open(f"{here}/../tools/SpawnOnIsland.server.luau").read()
+eq = "=" * 9
+open(f"{work}/h_standalone.luau", "w").write(f"SCRIPT_SOURCE = [{eq}[{src}]{eq}]\n" + open(f"{here}/standalone/harness.luau").read())
+PY
+(cd "$here/mock" && python3 bundle.py "$work/h_standalone.luau" "$work/o_standalone.luau" >/dev/null)
+"$work/luau" "$work/o_standalone.luau" | grep -E "FAIL|ERROR|ALL CHECKS PASSED|CHECK\(S\) FAILED"
 if command -v "${PWSH:-pwsh}" >/dev/null 2>&1; then
   echo "== Auto-sync script"
   "$here/sync/run_sync_tests.sh" | tail -1
