@@ -17,10 +17,10 @@ python3 "$here/mock/gen_api.py" "$work/globalTypes.d.luau" "$here/mock/apidb.lua
 echo "== Generator fairness"
 python3 "$here/generator/build.py" "$here/generator/test.luau" "$work/gen.luau"
 "$work/luau" "$work/gen.luau" | tail -1
-for mode in steady jitter fps240 map; do
+for mode in steady jitter fps240 map import; do
   echo "== Playtest ($mode)"
-  if [ "$mode" = map ]; then
-    header='MODE = "steady"; ISLAND = "map"'
+  if [ "$mode" = map ] || [ "$mode" = import ]; then
+    header="MODE = \"steady\"; ISLAND = \"$mode\""
   else
     header="MODE = \"$mode\""
   fi

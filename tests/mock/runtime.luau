@@ -1158,7 +1158,18 @@ method("ScaleTo", function(self, scale)
 	rawset(self, "__scale", scale)
 end)
 method("GetBoundingBox", function(self)
-	return self:GetPivot(), Vector3.new(4, 5, 2)
+	local parts = descendantsParts(self)
+	if #parts == 0 then
+		return self:GetPivot(), Vector3.zero
+	end
+	local lo, hi = Vector3.new(math.huge, math.huge, math.huge), Vector3.new(-math.huge, -math.huge, -math.huge)
+	for _, part in parts do
+		local pp = rawget(part, "__p")
+		local c, half = pp.CFrame.Position, pp.Size / 2
+		lo = Vector3.new(math.min(lo.X, c.X - half.X), math.min(lo.Y, c.Y - half.Y), math.min(lo.Z, c.Z - half.Z))
+		hi = Vector3.new(math.max(hi.X, c.X + half.X), math.max(hi.Y, c.Y + half.Y), math.max(hi.Z, c.Z + half.Z))
+	end
+	return CFrame.new((lo + hi) / 2), hi - lo
 end)
 method("Emit", function() end)
 method("Play", function(self)

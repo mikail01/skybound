@@ -4,6 +4,6 @@
 -- the Output window at startup).
 
 return table.freeze({
-	ID = "0.8.0",
-	NAME = "imported hub island",
+	ID = "0.8.1",
+	NAME = "island spawn fix",
 })

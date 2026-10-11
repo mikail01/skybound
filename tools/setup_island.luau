@@ -39,10 +39,15 @@ local function isDecor(name)
 	return false
 end
 
+-- The importer may prefix the file name or rename meshes, so match loosely.
+local function isIsland(model)
+	return string.find(model.Name, NAME, 1, true) ~= nil or model:FindFirstChild("Island_Grass", true) ~= nil
+end
+
 local function findMap()
 	for _, selected in Selection:Get() do
 		local model = if selected:IsA("Model") then selected else selected:FindFirstAncestorOfClass("Model")
-		while model and not model:FindFirstChild("Island_Grass", true) do
+		while model and not isIsland(model) do
 			model = model:FindFirstAncestorOfClass("Model")
 		end
 		if model then
@@ -57,7 +62,7 @@ local function findMap()
 	end
 	for _, container in { workspace, ServerStorage } do
 		for _, child in container:GetChildren() do
-			if child:IsA("Model") and (child.Name == NAME or child:FindFirstChild("Island_Grass", true)) then
+			if child:IsA("Model") and isIsland(child) then
 				return child
 			end
 		end

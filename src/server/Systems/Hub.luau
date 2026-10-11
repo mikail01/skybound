@@ -8,6 +8,7 @@
 -- UI panel.
 
 local Lighting = game:GetService("Lighting")
+local Players = game:GetService("Players")
 
 local Shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
 local Config = require(Shared.Config)
@@ -958,6 +959,42 @@ function Hub.init()
 	questBoard(layout.quests)
 
 	hubFolder.Parent = workspace
+	-- Only the hub spawn counts; other SpawnLocations in the place (e.g. on
+	-- an imported model) would otherwise win at random.
+	for _, d in workspace:GetDescendants() do
+		if d:IsA("SpawnLocation") and not d:IsDescendantOf(hubFolder) then
+			d.Enabled = false
+		end
+	end
+	if mapLayout then
+		print("[Skybound] hub uses the imported island " .. (source :: Model).Name)
+	else
+		warn(
+			"[Skybound] no "
+				.. Config.HUB_MAP_NAME
+				.. " found (ServerStorage or Workspace); using the island built from code"
+		)
+	end
+end
+
+-- Everyone (re)spawns on the hub spawn, including players whose character
+-- loaded before the hub was built.
+function Hub.start()
+	local spawn = hubFolder and hubFolder:FindFirstChild("HubSpawn")
+	if not spawn or not spawn:IsA("SpawnLocation") then
+		return
+	end
+	local function claim(player: Player)
+		player.RespawnLocation = spawn
+		local character = player.Character
+		if character and player:GetAttribute("InRun") ~= true then
+			character:PivotTo(spawn.CFrame + Vector3.new(0, 4, 0))
+		end
+	end
+	Players.PlayerAdded:Connect(claim)
+	for _, player in Players:GetPlayers() do
+		claim(player)
+	end
 end
 
 return Hub

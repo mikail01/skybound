@@ -116,25 +116,6 @@ local function isSolid(name: string): boolean
 	return false
 end
 
--- The imported model: by name first, else any model holding the island mesh.
-function HubMap.find(): Model?
-	local name = Config.HUB_MAP_NAME
-	for _, container in { ServerStorage, ReplicatedStorage, workspace } do
-		local found = container:FindFirstChild(name)
-		if found and found:IsA("Model") then
-			return found
-		end
-	end
-	for _, container in { ServerStorage, workspace } do
-		for _, child in container:GetChildren() do
-			if child:IsA("Model") and child:FindFirstChild(REF_GRASS, true) then
-				return child
-			end
-		end
-	end
-	return nil
-end
-
 type Frame = {
 	origin: Vector3, -- world position of the grass reference point
 	ax: Vector3, -- world offset of +1 map unit along X
@@ -142,39 +123,104 @@ type Frame = {
 	unit: number, -- studs per map unit
 }
 
-local function refPart(map: Model, name: string): BasePart?
-	local found = map:FindFirstChild(name, true)
-	return if found and found:IsA("BasePart") then found else nil
+-- Bounds of all meshes in the .glb, for imports whose mesh names changed.
+local GLB_CENTER = Vector3.new(0.058, 25.487, -0.004)
+local GLB_WIDTH = 80.685
+
+-- A mesh by its .glb name. Importers sometimes rename meshes (".001",
+-- "_Mesh", a model of that name around the part), so match loosely.
+local function refPart(map: Instance, name: string): BasePart?
+	local exact = map:FindFirstChild(name, true)
+	if exact and exact:IsA("BasePart") then
+		return exact
+	end
+	if exact and exact:IsA("Model") then
+		for _, d in exact:GetDescendants() do
+			if d:IsA("BasePart") and not string.find(string.lower(d.Name), "outline", 1, true) then
+				return d
+			end
+		end
+	end
+	local key = string.lower(name)
+	for _, d in map:GetDescendants() do
+		if d:IsA("BasePart") then
+			local n = string.lower(d.Name)
+			if string.sub(n, 1, #key) == key and not string.find(n, "outline", 1, true) then
+				return d
+			end
+		end
+	end
+	return nil
+end
+
+local function looksLikeMap(m: Instance): boolean
+	return string.find(string.lower(m.Name), string.lower(Config.HUB_MAP_NAME), 1, true) ~= nil
+		or refPart(m, REF_GRASS) ~= nil
+end
+
+-- The imported model, wherever it was left: by name first, else the
+-- outermost model holding the island mesh.
+function HubMap.find(): Model?
+	local containers = { ServerStorage, ReplicatedStorage, workspace }
+	for _, container in containers do
+		local found = container:FindFirstChild(Config.HUB_MAP_NAME, true)
+		if found and found:IsA("Model") then
+			return found
+		end
+	end
+	for _, container in containers do
+		for _, d in container:GetDescendants() do
+			if
+				d:IsA("Model")
+				and d.Name ~= "Hub"
+				and not d:FindFirstAncestor("Hub")
+				-- outermost: Workspace itself counts as a Model, so allow it
+				and not (d.Parent and d.Parent ~= workspace and d.Parent:IsA("Model"))
+				and looksLikeMap(d)
+			then
+				return d
+			end
+		end
+	end
+	return nil
 end
 
 -- Solve how map (x, z) maps onto the world from three known meshes. This is
--- a 2x2 linear map, so a rotated or mirrored import still lines up.
+-- a 2x2 linear map, so a rotated or mirrored import still lines up. When
+-- those meshes can't be found, fall back to the model's bounding box.
 local function measure(map: Model): Frame?
 	local grass = refPart(map, REF_GRASS)
 	local plateau = refPart(map, "Island_Plateau")
 	local pad = refPart(map, "Spawn_Pad")
-	if not grass or not plateau or not pad then
-		return nil
+	if grass and plateau and pad then
+		local g = REF_POINTS.Island_Grass
+		local a = REF_POINTS.Island_Plateau - g
+		local b = REF_POINTS.Spawn_Pad - g
+		local wa = plateau.Position - grass.Position
+		local wb = pad.Position - grass.Position
+		local det = a.X * b.Z - b.X * a.Z
+		-- Columns of the inverse of [a b] (in X/Z), applied to the world vectors.
+		local ax = (wa * b.Z - wb * a.Z) / det
+		local az = (wb * a.X - wa * b.X) / det
+		ax = Vector3.new(ax.X, 0, ax.Z)
+		az = Vector3.new(az.X, 0, az.Z)
+		local unit = grass.Size.X / GRASS_WIDTH
+		if unit > 0 and ax.Magnitude > 0 and az.Magnitude > 0 then
+			return { origin = grass.Position, ax = ax, az = az, unit = unit }
+		end
 	end
-	local g = REF_POINTS.Island_Grass
-	local a = REF_POINTS.Island_Plateau - g
-	local b = REF_POINTS.Spawn_Pad - g
-	local wa = plateau.Position - grass.Position
-	local wb = pad.Position - grass.Position
-	local det = a.X * b.Z - b.X * a.Z
-	if math.abs(det) < 1e-6 then
-		return nil
-	end
-	-- Columns of the inverse of [a b] (in X/Z), applied to the world vectors.
-	local ax = (wa * b.Z - wb * a.Z) / det
-	local az = (wb * a.X - wa * b.X) / det
-	ax = Vector3.new(ax.X, 0, ax.Z)
-	az = Vector3.new(az.X, 0, az.Z)
-	local unit = grass.Size.X / GRASS_WIDTH
+	local cf, size = map:GetBoundingBox()
+	local unit = size.X / GLB_WIDTH
 	if unit <= 0 then
 		return nil
 	end
-	return { origin = grass.Position, ax = ax, az = az, unit = unit }
+	local origin = cf.Position + (REF_POINTS.Island_Grass - GLB_CENTER) * unit
+	return {
+		origin = origin,
+		ax = Vector3.new(unit, 0, 0),
+		az = Vector3.new(0, 0, unit),
+		unit = unit,
+	}
 end
 
 local function worldOf(frame: Frame, p: Vector3): Vector3
@@ -476,21 +522,24 @@ end
 -- Clones the map into `parent`, sizes it, centres its meadow on `center`
 -- and returns where everything goes. nil if the map can't be understood.
 function HubMap.build(source: Model, parent: Instance, center: Vector3): Layout?
+	local wasArchivable = source.Archivable
+	source.Archivable = true
 	local map = source:Clone()
-	map.Name = "IslandMap"
-	if source:IsDescendantOf(workspace) then
-		source:Destroy() -- the hub owns it now; don't leave a second copy
+	source.Archivable = wasArchivable
+	if not map then
+		warn("[Skybound] could not copy " .. source.Name .. "; using the code-built hub")
+		return nil
 	end
+	map.Name = "IslandMap"
 
 	local frame = measure(map)
 	if not frame then
-		warn(
-			"[Skybound] "
-				.. source.Name
-				.. " is missing Island_Grass / Island_Plateau / Spawn_Pad; using the code-built hub"
-		)
+		warn("[Skybound] could not measure " .. source.Name .. "; using the code-built hub")
 		map:Destroy()
 		return nil
+	end
+	if source:IsDescendantOf(workspace) then
+		source:Destroy() -- the hub owns it now; don't leave a second copy
 	end
 
 	local wanted = Config.HUB_MAP_SCALE

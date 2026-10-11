@@ -49,7 +49,9 @@ end
 -- makes of FloatingIslandMap.glb. One box per mesh at its .glb bounding box,
 -- at importer scale 1 and away from the hub, so the hub has to move and
 -- scale it.
-if ISLAND == "map" then
+-- ISLAND = "import" is a messier import: left in the Workspace under the
+-- file's name, every mesh renamed, plus a stray SpawnLocation.
+if ISLAND == "map" or ISLAND == "import" then
 	local groups = {
 		Island = {
 			{ "Island_Grass", Vector3.new(0.081, 21.696, 0.0), Vector3.new(80.0, 4.258, 80.081) },
@@ -82,7 +84,7 @@ if ISLAND == "map" then
 	}
 	local importedAt = Vector3.new(300, 20, -150)
 	local map = Instance.new("Model")
-	map.Name = "FloatingIslandMap"
+	map.Name = if ISLAND == "import" then "84d78c00-FloatingIslandMap" else "FloatingIslandMap"
 	local inner = Instance.new("Model")
 	inner.Name = "Model"
 	inner.Parent = map
@@ -92,7 +94,7 @@ if ISLAND == "map" then
 		group.Parent = inner
 		for _, def in meshes do
 			local mesh = Instance.new("MeshPart")
-			mesh.Name = def[1]
+			mesh.Name = if ISLAND == "import" then "Mesh" else def[1]
 			mesh.Size = def[3]
 			mesh.CFrame = CFrame.new(importedAt + def[2])
 			mesh.Anchored = false
@@ -100,7 +102,16 @@ if ISLAND == "map" then
 			mesh.Parent = group
 		end
 	end
-	map.Parent = game:GetService("ServerStorage")
+	if ISLAND == "import" then
+		map.Parent = workspace
+		local stray = Instance.new("SpawnLocation")
+		stray.Name = "StraySpawn"
+		stray.Anchored = true
+		stray.CFrame = CFrame.new(0, 5, 0)
+		stray.Parent = workspace
+	else
+		map.Parent = game:GetService("ServerStorage")
+	end
 end
 
 -- Server boot --------------------------------------------------------------------
@@ -110,6 +121,25 @@ for _ = 1, 30 do
 	R.frame(DT)
 end
 check(workspace:FindFirstChild("Hub") ~= nil, "server built workspace.Hub")
+if ISLAND == "import" then
+	local hub = workspace.Hub
+	local Config = serverCtx.cache[byPath["ReplicatedStorage/Shared/Config"]]
+	local center = Config.HUB_CENTER
+	local u = Config.HUB_MAP_SCALE
+	check(hub:GetAttribute("Island") == "map", "renamed import in the Workspace is still used")
+	local map = hub:FindFirstChild("IslandMap")
+	local cf, size = map:GetBoundingBox()
+	check(math.abs(size.X - 80.685 * u) < 0.05, "renamed import scaled to HUB_MAP_SCALE")
+	check(
+		(Vector3.new(cf.Position.X, 0, cf.Position.Z) - Vector3.new(center.X, 0, center.Z)).Magnitude < u,
+		"renamed import centred on the hub"
+	)
+	check(workspace:FindFirstChild("84d78c00-FloatingIslandMap") == nil, "no second copy left in the Workspace")
+	check(workspace.StraySpawn.Enabled == false, "other SpawnLocations are disabled")
+	local spawn = hub:FindFirstChild("HubSpawn")
+	local padTop = center.Y + (29.03 - 23.83) * u
+	check(spawn ~= nil and math.abs(spawn.Position.Y - 0.6 - padTop) < 0.5, "spawn is on the island's spawn pad height")
+end
 if ISLAND == "map" then
 	local hub = workspace.Hub
 	local Config = serverCtx.cache[byPath["ReplicatedStorage/Shared/Config"]]
@@ -633,6 +663,7 @@ R.setParent(player, nil)
 character:Destroy()
 run(1)
 check(PlayerData.get(player) == nil, "profile is released when the player leaves")
+check(player.RespawnLocation == workspace.Hub.HubSpawn, "players respawn at the hub spawn")
 local player2 = R.newInstance("Player")
 rawget(player2, "__p").Name = "Tester"
 rawget(player2, "__p").UserId = 1001
