@@ -45,6 +45,64 @@ for _, e in ENTRIES do
 	byPath[e.path] = inst
 end
 
+-- Imported island (ISLAND = "map"): a stand-in for what Studio's 3D Importer
+-- makes of FloatingIslandMap.glb. One box per mesh at its .glb bounding box,
+-- at importer scale 1 and away from the hub, so the hub has to move and
+-- scale it.
+if ISLAND == "map" then
+	local groups = {
+		Island = {
+			{ "Island_Grass", Vector3.new(0.081, 21.696, 0.0), Vector3.new(80.0, 4.258, 80.081) },
+			{ "Island_Grass_Outline", Vector3.new(0.058, 21.696, -0.004), Vector3.new(80.685, 5.204, 80.782) },
+			{ "Island_Dirt", Vector3.new(0.0, 14.949, 0.0), Vector3.new(77.952, 14.202, 77.384) },
+			{ "Island_Terrace", Vector3.new(-0.059, 25.304, -17.152), Vector3.new(77.676, 5.72, 43.771) },
+			{ "Island_Plateau", Vector3.new(25.999, 29.052, -19.533), Vector3.new(18.622, 4.142, 20.509) },
+			{ "Island_Paths", Vector3.new(-0.13, 26.034, 5.356), Vector3.new(46.826, 4.576, 48.857) },
+		},
+		Water = {
+			{ "Water_River", Vector3.new(4.348, 26.074, -3.626), Vector3.new(18.213, 4.813, 60.644) },
+		},
+		Props = {
+			{ "Props_Lantern", Vector3.new(16.174, 27.04, 26.037), Vector3.new(1.897, 6.43, 1.897) },
+		},
+		Tree = {
+			{ "Tree_Pine_A", Vector3.new(-34.321, 36.128, -8.679), Vector3.new(10.831, 16.303, 9.832) },
+		},
+		Portal = {
+			{ "Portal_Arch", Vector3.new(28.33, 38.362, -19.793), Vector3.new(14.909, 14.715, 14.909) },
+			{ "Portal_Label", Vector3.new(28.009, 47.219, -20.514), Vector3.new(7.104, 2.17, 3.625) },
+			{ "Portal_Vortex", Vector3.new(28.009, 37.908, -20.514), Vector3.new(6.503, 10.415, 3.184) },
+		},
+		Spawn = {
+			{ "Spawn_Pad", Vector3.new(17.752, 28.559, -7.89), Vector3.new(10.888, 0.947, 10.888) },
+		},
+		Plants = {
+			{ "Plants_Flowers", Vector3.new(-3.688, 26.31, -0.434), Vector3.new(51.569, 5.05, 37.26) },
+		},
+	}
+	local importedAt = Vector3.new(300, 20, -150)
+	local map = Instance.new("Model")
+	map.Name = "FloatingIslandMap"
+	local inner = Instance.new("Model")
+	inner.Name = "Model"
+	inner.Parent = map
+	for groupName, meshes in groups do
+		local group = Instance.new("Model")
+		group.Name = groupName
+		group.Parent = inner
+		for _, def in meshes do
+			local mesh = Instance.new("MeshPart")
+			mesh.Name = def[1]
+			mesh.Size = def[3]
+			mesh.CFrame = CFrame.new(importedAt + def[2])
+			mesh.Anchored = false
+			mesh.CollisionFidelity = Enum.CollisionFidelity.PreciseConvexDecomposition
+			mesh.Parent = group
+		end
+	end
+	map.Parent = game:GetService("ServerStorage")
+end
+
 -- Server boot --------------------------------------------------------------------
 print("== Boot server")
 R.runScript(serverCtx, byPath["ServerScriptService/Server"])
@@ -52,6 +110,57 @@ for _ = 1, 30 do
 	R.frame(DT)
 end
 check(workspace:FindFirstChild("Hub") ~= nil, "server built workspace.Hub")
+if ISLAND == "map" then
+	local hub = workspace.Hub
+	local Config = serverCtx.cache[byPath["ReplicatedStorage/Shared/Config"]]
+	local center = Config.HUB_CENTER
+	local u = Config.HUB_MAP_SCALE
+	check(hub:GetAttribute("Island") == "map", "hub uses the imported island")
+	local map = hub:FindFirstChild("IslandMap")
+	check(map ~= nil, "island map is in the hub")
+	local grass = map and map:FindFirstChild("Island_Grass", true)
+	check(grass ~= nil and math.abs(grass.Size.X - 80 * u) < 0.01, "island scaled to HUB_MAP_SCALE")
+	check(
+		grass ~= nil and (Vector3.new(grass.Position.X, 0, grass.Position.Z) - Vector3.new(center.X, 0, center.Z)).Magnitude < u,
+		"island centred on the hub"
+	)
+	local meadowTop = grass and grass.Position.Y + grass.Size.Y / 2
+	check(meadowTop ~= nil and math.abs(meadowTop - center.Y) < 0.05 * u, "meadow sits at HUB_CENTER height")
+	check(grass ~= nil and grass.Anchored, "map parts are anchored")
+	local outline = map and map:FindFirstChild("Island_Grass_Outline", true)
+	check(outline ~= nil and not outline.CanCollide and not outline.CanQuery, "outline meshes don't collide")
+	local paths = map and map:FindFirstChild("Island_Paths", true)
+	check(paths ~= nil and not paths.CanCollide, "paths are decoration")
+	local pad = map and map:FindFirstChild("Spawn_Pad", true)
+	local spawn = hub:FindFirstChild("HubSpawn")
+	check(
+		spawn ~= nil and pad ~= nil and (Vector3.new(spawn.Position.X, 0, spawn.Position.Z) - Vector3.new(pad.Position.X, 0, pad.Position.Z)).Magnitude < 1
+			and math.abs(spawn.Position.Y - (pad.Position.Y + pad.Size.Y / 2)) < 1.5,
+		"spawn sits on the map's spawn pad"
+	)
+	local portal = hub:FindFirstChild("Portal")
+	local surface = portal and portal:FindFirstChild("Surface")
+	check(surface ~= nil and surface:FindFirstChildWhichIsA("ParticleEmitter") ~= nil, "map portal vortex is the animated Surface")
+	local trigger = hub:FindFirstChild("PortalTrigger")
+	check(trigger ~= nil and surface ~= nil and (trigger.Position - surface.Position).Magnitude < 12 * u, "portal trigger is at the map's portal")
+	local stairs = 0
+	for _, c in hub:GetChildren() do
+		if c.Name == "Stairs" then
+			stairs += 1
+		end
+	end
+	check(stairs == 3, "stairs connect the island's levels (" .. stairs .. ")")
+	for _, name in { "DailyStand", "UpgradeStation", "GearStall", "SkybrewStall", "QuestBoard", "Leaderboard" } do
+		local m = hub:FindFirstChild(name)
+		local groundY = m and m:GetAttribute("GroundY")
+		local flat = m and Vector3.new(m:GetPivot().Position.X - center.X, 0, m:GetPivot().Position.Z - center.Z)
+		check(
+			groundY ~= nil and groundY >= center.Y - 0.5 and flat ~= nil and flat.Magnitude < 38 * u,
+			name .. " stands on the island"
+		)
+	end
+	check(game:GetService("ServerStorage"):FindFirstChild("FloatingIslandMap") ~= nil, "imported source stays in ServerStorage")
+end
 
 -- Player join --------------------------------------------------------------------
 print("== Player joins")

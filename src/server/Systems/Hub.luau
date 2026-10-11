@@ -1,16 +1,31 @@
 --!strict
--- Builds the floating hub island, its stalls, the portal and the lighting
--- entirely from code, in a chunky toy-like style: rounded shapes (balls and
--- cylinders), bright smooth materials, strong silhouettes. Everything lands
--- in workspace.Hub. Interactables get a ProximityPrompt with a "Panel"
--- attribute; the client opens the matching UI panel.
+-- Builds the hub: the floating island, its stalls, the portal and the
+-- lighting. When the imported island map (Config.HUB_MAP_NAME, e.g. in
+-- ServerStorage) is present, HubMap places it and the stalls go on its
+-- spots; otherwise the island is built entirely from code, in a chunky
+-- toy-like style. Everything lands in workspace.Hub. Interactables get a
+-- ProximityPrompt with a "Panel" attribute; the client opens the matching
+-- UI panel.
 
 local Lighting = game:GetService("Lighting")
 
 local Shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
 local Config = require(Shared.Config)
 
+local HubMap = require(script.Parent.HubMap)
+
 local Hub = {}
+
+-- Ground CFrames for everything the hub places; LookVector faces visitors.
+type Layout = {
+	spawn: CFrame,
+	daily: CFrame,
+	upgrade: CFrame,
+	gear: CFrame,
+	potions: CFrame,
+	quests: CFrame,
+	leaderboard: CFrame,
+}
 
 local CENTER = Config.HUB_CENTER
 local TOP = CENTER.Y -- walkable surface height
@@ -89,6 +104,11 @@ local function model(name: string, parent: Instance?): Model
 	m.Name = name
 	m.Parent = parent or hubFolder
 	return m
+end
+
+-- Lets the client's tutorial ring sit on the ground under an objective.
+local function markGround(m: Model, cf: CFrame)
+	m:SetAttribute("GroundY", cf.Position.Y)
 end
 
 local function billboard(
@@ -194,6 +214,7 @@ local function stall(
 	tag: string?
 ): (Model, Part)
 	local m = model(name)
+	markGround(m, cf)
 	part({
 		Name = "Floor",
 		Size = Vector3.new(16, 1, 11),
@@ -385,7 +406,7 @@ local function pathTo(from: Vector3, to: Vector3)
 	end
 end
 
-local function spawnPad()
+local function spawnLocation(cf: CFrame)
 	local spawn = Instance.new("SpawnLocation")
 	spawn.Name = "HubSpawn"
 	spawn.Anchored = true
@@ -393,14 +414,17 @@ local function spawnPad()
 	spawn.Size = Vector3.new(12, 1, 12)
 	spawn.Transparency = 1
 	spawn.CanCollide = false
-	spawn.CFrame =
-		CFrame.lookAt(CENTER + Vector3.new(0, 0.6, 42), CENTER + Vector3.new(0, 0.6, -40))
+	spawn.CFrame = cf + Vector3.new(0, 0.6, 0)
 	spawn.Duration = 0
 	spawn.Parent = hubFolder
 	local decal = spawn:FindFirstChildOfClass("Decal")
 	if decal then
 		decal:Destroy()
 	end
+end
+
+local function spawnPad(cf: CFrame)
+	spawnLocation(cf)
 	local pad = cylinder(1, 14, CENTER + Vector3.new(0, 0.3, 42), Color3.fromRGB(255, 236, 140))
 	pad.Name = "SpawnPad"
 	cylinder(1.1, 10, CENTER + Vector3.new(0, 0.35, 42), Color3.fromRGB(255, 255, 220)).Name =
@@ -410,6 +434,7 @@ end
 local function portal()
 	local m = model("Portal")
 	local base = CENTER + Vector3.new(0, 0, -50)
+	m:SetAttribute("GroundY", base.Y)
 	-- Stepped round base.
 	cylinder(1.4, 30, base + Vector3.new(0, 0.7, 0), C.stone, m)
 	cylinder(1.4, 24, base + Vector3.new(0, 2.1, 0), C.stone:Lerp(C.white, 0.2), m)
@@ -506,8 +531,7 @@ local function portal()
 	m.PrimaryPart = surface
 end
 
-local function dailyStand()
-	local cf = CFrame.lookAt(CENTER + Vector3.new(-34, 0, 16), CENTER + Vector3.new(0, 0, 30))
+local function dailyStand(cf: CFrame)
 	local m =
 		stall("DailyStand", cf, Color3.fromRGB(255, 120, 150), "DAILY REWARD", "Daily", "FREE")
 	-- Treasure chest on the counter.
@@ -535,10 +559,10 @@ local function dailyStand()
 	}, m)
 end
 
-local function upgradeStation()
+local function upgradeStation(cf: CFrame)
 	local m = model("UpgradeStation")
-	local pos = CENTER + Vector3.new(34, 0, 16)
-	local cf = CFrame.lookAt(pos, CENTER + Vector3.new(0, 0, 30))
+	markGround(m, cf)
+	local pos = cf.Position
 	cylinder(1, 16, pos + Vector3.new(0, 0.5, 0), C.stone, m)
 	local body = part({
 		Name = "Body",
@@ -586,8 +610,7 @@ local function upgradeStation()
 	m.PrimaryPart = body
 end
 
-local function gearStall()
-	local cf = CFrame.lookAt(CENTER + Vector3.new(-40, 0, -22), CENTER + Vector3.new(0, 0, -10))
+local function gearStall(cf: CFrame)
 	local m = stall("GearStall", cf, Color3.fromRGB(80, 170, 255), "GEAR", "Gear")
 	for i, x in { -3.5, 3.5 } do
 		local display = model("Jetpack" .. i, m)
@@ -623,8 +646,7 @@ local function gearStall()
 	end
 end
 
-local function potionStall()
-	local cf = CFrame.lookAt(CENTER + Vector3.new(40, 0, -22), CENTER + Vector3.new(0, 0, -10))
+local function potionStall(cf: CFrame)
 	local m = stall("SkybrewStall", cf, Color3.fromRGB(110, 210, 130), "SKYBREW", "Potions")
 	for i, def in Config.Potions do
 		local x = -5.6 + (i - 1) * 2.8
@@ -655,10 +677,9 @@ local function potionStall()
 	bubbles.Parent = attachment
 end
 
-local function leaderboardBoard()
+local function leaderboardBoard(cf: CFrame)
 	local m = model("Leaderboard")
-	local pos = CENTER + Vector3.new(50, 0, 46)
-	local cf = CFrame.lookAt(pos, CENTER + Vector3.new(0, 0, 20))
+	markGround(m, cf)
 	for _, x in { -6, 6 } do
 		local post = cylinder(15, 1.4, Vector3.zero, C.woodDark, m)
 		post.CFrame = cf * CFrame.new(x, 7.5, 0) * CFrame.Angles(0, 0, math.rad(90))
@@ -707,10 +728,9 @@ local function leaderboardBoard()
 	end
 end
 
-local function questBoard()
+local function questBoard(cf: CFrame)
 	local m = model("QuestBoard")
-	local pos = CENTER + Vector3.new(-50, 0, 46)
-	local cf = CFrame.lookAt(pos, CENTER + Vector3.new(0, 0, 20))
+	markGround(m, cf)
 	for _, x in { -5, 5 } do
 		local post = cylinder(12, 1.3, Vector3.zero, C.woodDark, m)
 		post.CFrame = cf * CFrame.new(x, 6, 0) * CFrame.Angles(0, 0, math.rad(90))
@@ -817,10 +837,13 @@ local function decorate()
 			bush(Vector3.new(CENTER.X + offset.X, TOP, CENTER.Z + offset.Z), rng:NextNumber(3, 5))
 		end
 	end
-	-- Floating mini islands and clouds around the hub.
-	for i = 1, 7 do
+end
+
+-- Floating mini islands and clouds around an island of the given radius.
+local function sky(radius: number, miniIslands: boolean)
+	for i = 1, if miniIslands then 7 else 0 do
 		local a = i / 7 * math.pi * 2 + 0.3
-		local r = ISLAND_RADIUS + rng:NextNumber(30, 70)
+		local r = radius + rng:NextNumber(30, 70)
 		local p = CENTER + Vector3.new(math.cos(a) * r, rng:NextNumber(-25, 20), math.sin(a) * r)
 		local size = rng:NextNumber(10, 18)
 		cylinder(2.5, size, p, C.grass)
@@ -831,7 +854,7 @@ local function decorate()
 	end
 	for _ = 1, 18 do
 		local a = rng:NextNumber() * math.pi * 2
-		local r = rng:NextNumber(ISLAND_RADIUS + 20, ISLAND_RADIUS + 160)
+		local r = rng:NextNumber(radius + 20, radius + 160)
 		cloud(
 			CENTER + Vector3.new(math.cos(a) * r, rng:NextNumber(-60, 40), math.sin(a) * r),
 			rng:NextNumber(1, 2.4)
@@ -873,6 +896,22 @@ local function lighting()
 	color.Parent = Lighting
 end
 
+-- Where everything goes on the island built from code.
+local function codeLayout(): Layout
+	local function at(x: number, z: number, faceX: number, faceZ: number): CFrame
+		return CFrame.lookAt(CENTER + Vector3.new(x, 0, z), CENTER + Vector3.new(faceX, 0, faceZ))
+	end
+	return {
+		spawn = at(0, 42, 0, -40),
+		daily = at(-34, 16, 0, 30),
+		upgrade = at(34, 16, 0, 30),
+		gear = at(-40, -22, 0, -10),
+		potions = at(40, -22, 0, -10),
+		leaderboard = at(50, 46, 0, 20),
+		quests = at(-50, 46, 0, 20),
+	}
+end
+
 function Hub.init()
 	-- Clear the default template pieces so the hub floats in open sky.
 	for _, name in { "Baseplate", "SpawnLocation" } do
@@ -889,21 +928,34 @@ function Hub.init()
 	hubFolder.Name = "Hub"
 
 	lighting()
-	island()
-	spawnPad()
-	portal()
-	dailyStand()
-	upgradeStation()
-	gearStall()
-	potionStall()
-	leaderboardBoard()
-	questBoard()
-	pathTo(CENTER + Vector3.new(0, 0, 36), CENTER + Vector3.new(0, 0, -36))
-	pathTo(CENTER + Vector3.new(0, 0, 22), CENTER + Vector3.new(-26, 0, 14))
-	pathTo(CENTER + Vector3.new(0, 0, 22), CENTER + Vector3.new(26, 0, 14))
-	pathTo(CENTER + Vector3.new(0, 0, -16), CENTER + Vector3.new(-32, 0, -20))
-	pathTo(CENTER + Vector3.new(0, 0, -16), CENTER + Vector3.new(32, 0, -20))
-	decorate()
+	local source = HubMap.find()
+	local mapLayout = source and HubMap.build(source, hubFolder, CENTER)
+	local layout: Layout
+	if mapLayout then
+		hubFolder:SetAttribute("Island", "map")
+		layout = mapLayout
+		spawnLocation(layout.spawn)
+		sky(mapLayout.radius, false)
+	else
+		hubFolder:SetAttribute("Island", "code")
+		layout = codeLayout()
+		island()
+		spawnPad(layout.spawn)
+		portal()
+		pathTo(CENTER + Vector3.new(0, 0, 36), CENTER + Vector3.new(0, 0, -36))
+		pathTo(CENTER + Vector3.new(0, 0, 22), CENTER + Vector3.new(-26, 0, 14))
+		pathTo(CENTER + Vector3.new(0, 0, 22), CENTER + Vector3.new(26, 0, 14))
+		pathTo(CENTER + Vector3.new(0, 0, -16), CENTER + Vector3.new(-32, 0, -20))
+		pathTo(CENTER + Vector3.new(0, 0, -16), CENTER + Vector3.new(32, 0, -20))
+		decorate()
+		sky(ISLAND_RADIUS, true)
+	end
+	dailyStand(layout.daily)
+	upgradeStation(layout.upgrade)
+	gearStall(layout.gear)
+	potionStall(layout.potions)
+	leaderboardBoard(layout.leaderboard)
+	questBoard(layout.quests)
 
 	hubFolder.Parent = workspace
 end

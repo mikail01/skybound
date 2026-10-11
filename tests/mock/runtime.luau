@@ -490,6 +490,14 @@ Color3 = {
 	fromHSV = function(h, s, v)
 		return c3(v, v * (1 - s), v * (1 - s * h))
 	end,
+	fromHex = function(hex)
+		local h = string.gsub(hex, "^#", "")
+		assert(#h == 6, "Unable to convert characters to hex value")
+		local function byte(i)
+			return tonumber(string.sub(h, i, i + 1), 16) / 255
+		end
+		return c3(byte(1), byte(3), byte(5))
+	end,
 }
 
 -- UDim / UDim2
@@ -1134,6 +1142,20 @@ method("PivotTo", function(self, target)
 	if p.WorldPivot then
 		p.WorldPivot = delta * p.WorldPivot
 	end
+end)
+method("GetScale", function(self)
+	return rawget(self, "__scale") or 1
+end)
+method("ScaleTo", function(self, scale)
+	local factor = scale / (rawget(self, "__scale") or 1)
+	local pivot = self:GetPivot()
+	for _, part in descendantsParts(self) do
+		local pp = rawget(part, "__p")
+		local rel = pivot:ToObjectSpace(pp.CFrame)
+		pp.CFrame = pivot * (CFrame.new(rel.Position * factor) * rel.Rotation)
+		pp.Size = pp.Size * factor
+	end
+	rawset(self, "__scale", scale)
 end)
 method("GetBoundingBox", function(self)
 	return self:GetPivot(), Vector3.new(4, 5, 2)

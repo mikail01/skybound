@@ -73,6 +73,11 @@ Config.METERS_PER_STUD = 1
 
 -- World layout ---------------------------------------------------------------
 Config.HUB_CENTER = Vector3.new(0, 100, 0)
+-- Imported hub island (FloatingIslandMap.glb via Studio's 3D Importer). Keep
+-- it in ServerStorage; the hub clones it in, scales it and centres its
+-- meadow on HUB_CENTER. Without it the hub builds its island from code.
+Config.HUB_MAP_NAME = "FloatingIslandMap"
+Config.HUB_MAP_SCALE = 2.5 -- studs per map unit (the map is ~80 units across)
 Config.RUN_ORIGIN = Vector3.new(4000, 800, 0) -- first run lane
 Config.RUN_LANE_SPACING = 400 -- each player climbs in their own lane
 Config.RUN_HALF_WIDTH = 30 -- playable area is origin.X +/- this

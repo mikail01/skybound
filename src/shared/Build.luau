@@ -4,6 +4,6 @@
 -- the Output window at startup).
 
 return table.freeze({
-	ID = "0.7.0",
-	NAME = "achievements + self-check",
+	ID = "0.8.0",
+	NAME = "imported hub island",
 })

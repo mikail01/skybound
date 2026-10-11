@@ -25,6 +25,14 @@ function Diagnostics.run(): { Check }
 
 	local hub = workspace:FindFirstChild("Hub")
 	add("hub built", hub ~= nil, "workspace.Hub")
+	local island = hub and hub:GetAttribute("Island")
+	add(
+		"hub island",
+		island ~= nil,
+		if island == "map"
+			then "imported " .. Config.HUB_MAP_NAME
+			else "built from code (no " .. Config.HUB_MAP_NAME .. " in ServerStorage)"
+	)
 	local trigger = hub and hub:FindFirstChild("PortalTrigger")
 	add(
 		"portal trigger",

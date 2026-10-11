@@ -17,9 +17,14 @@ python3 "$here/mock/gen_api.py" "$work/globalTypes.d.luau" "$here/mock/apidb.lua
 echo "== Generator fairness"
 python3 "$here/generator/build.py" "$here/generator/test.luau" "$work/gen.luau"
 "$work/luau" "$work/gen.luau" | tail -1
-for mode in steady jitter fps240; do
+for mode in steady jitter fps240 map; do
   echo "== Playtest ($mode)"
-  (echo "MODE = \"$mode\""; cat "$here/mock/harness.luau") > "$work/h_$mode.luau"
+  if [ "$mode" = map ]; then
+    header='MODE = "steady"; ISLAND = "map"'
+  else
+    header="MODE = \"$mode\""
+  fi
+  (echo "$header"; cat "$here/mock/harness.luau") > "$work/h_$mode.luau"
   (cd "$here/mock" && python3 bundle.py "$work/h_$mode.luau" "$work/o_$mode.luau" >/dev/null)
   "$work/luau" "$work/o_$mode.luau" | grep -E "FAIL|ERROR|ALL CHECKS PASSED|CHECK\(S\) FAILED"
 done

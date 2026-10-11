@@ -144,7 +144,9 @@ local function update(dt: number)
 		end
 	end
 	local pivot = target:GetPivot().Position
-	local groundY = Config.HUB_CENTER.Y + 0.15
+	-- The hub records each objective's ground height (the island has levels).
+	local ground = target:GetAttribute("GroundY")
+	local groundY = (if typeof(ground) == "number" then ground else Config.HUB_CENTER.Y) + 0.15
 	if marker then
 		marker.CFrame = CFrame.new(pivot.X, pivot.Y + 16 + math.sin(t * 3) * 1.2, pivot.Z)
 	end
@@ -156,7 +158,8 @@ local function update(dt: number)
 	local character = player.Character
 	local hrp = character and character:FindFirstChild("HumanoidRootPart")
 	if chevron and hrp and hrp:IsA("BasePart") then
-		local from = Vector3.new(hrp.Position.X, groundY + 0.3, hrp.Position.Z)
+		-- At the player's feet, whichever level they're standing on.
+		local from = Vector3.new(hrp.Position.X, hrp.Position.Y - 2.6, hrp.Position.Z)
 		local flatTarget = Vector3.new(pivot.X, from.Y, pivot.Z)
 		local distance = (flatTarget - from).Magnitude
 		local show = distance > CLOSE_ENOUGH
