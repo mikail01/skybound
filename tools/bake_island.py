@@ -18,6 +18,8 @@ from PIL import Image
 ROOT = Path(__file__).resolve().parent.parent
 SRC = ROOT / "assets" / "FloatingIslandMap.glb"
 OUT = ROOT / "src" / "server" / "Lib" / "IslandMesh.luau"
+STANDALONE_TEMPLATE = ROOT / "tools" / "standalone" / "template.luau"
+STANDALONE_OUT = ROOT / "tools" / "SpawnOnIsland.server.luau"
 
 data = SRC.read_bytes()
 json_len = struct.unpack("<I", data[12:16])[0]
@@ -103,5 +105,8 @@ for name, verts, tris in meshes:
     lines.append("\t\t},")
 lines += ["\t},", "}", ""]
 OUT.write_text("\n".join(lines))
+# The drop-in script embeds the same table (everything after "return ").
+table = "\n".join(lines[lines.index("return {") :])[len("return ") :].rstrip()
+STANDALONE_OUT.write_text(STANDALONE_TEMPLATE.read_text().replace("--[[DATA]]", table, 1))
 total = sum(len(t) for _, _, t in meshes)
 print(f"{OUT.relative_to(ROOT)}: {len(meshes)} meshes, {total} triangles, {len(palette)} colours", file=sys.stderr)
