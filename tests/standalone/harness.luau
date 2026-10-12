@@ -65,12 +65,20 @@ for _ = 1, 10 do
 	R.frame(DT)
 end
 
-local island = workspace:FindFirstChild("FloatingIsland")
+local island = workspace:FindFirstChild("SpawnIsland")
 check(island ~= nil, "island is built when none was imported")
 local spawn = workspace:FindFirstChild("IslandSpawn")
 check(spawn ~= nil and spawn.Enabled, "island spawn exists")
 check(oldSpawn.Enabled == false, "the game's own spawn is switched off")
-check((touch.Position - spawn.Position).Magnitude < 80 and touch.Position.Y > spawn.Position.Y, "the game's portal trigger moved into the island arch")
+local pitTrigger = workspace:FindFirstChild("IslandPitTrigger")
+check(pitTrigger ~= nil, "the pit has a trigger")
+check(
+	pitTrigger ~= nil and (Vector3.new(touch.Position.X, 0, touch.Position.Z) - Vector3.new(pitTrigger.Position.X, 0, pitTrigger.Position.Z)).Magnitude < 5
+		and touch.Position.Y < spawn.Position.Y,
+	"the game's portal trigger moved into the pit"
+)
+local toPit = Vector3.new(pitTrigger.Position.X - spawn.Position.X, 0, pitTrigger.Position.Z - spawn.Position.Z)
+check(toPit.Magnitude > 50 and spawn.CFrame.LookVector:Dot(toPit.Unit) > 0.95, "spawn is at the start of the path, facing the pit")
 
 -- Player joins on the old spawn ------------------------------------------------------
 local player = R.newInstance("Player")
@@ -110,13 +118,17 @@ character:PivotTo(CFrame.new(0, 3, 0))
 run(1)
 check((root.Position - spawn.Position).Magnitude < 10, "kept on the island when the game moves new characters")
 
--- Portal starts the game's climb and the player stays there --------------------------
+-- Dropping into the pit starts the game's climb and the player stays there ----------
 run(8)
+R.spawnIn(serverCtx, function()
+	R.signalFor(pitTrigger, "Touched"):Fire(root)
+end)
+run(0.1)
 R.spawnIn(serverCtx, function()
 	R.signalFor(touch, "Touched"):Fire(root)
 end)
 run(3)
-check((root.Position - TOWER).Magnitude < 50, "walking through the portal still starts the game's climb")
+check((root.Position - TOWER).Magnitude < 50, "jumping into the pit still starts the game's climb")
 
 -- Run over: the game teleports the player back to its plaza --------------------------
 run(5)
